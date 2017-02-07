@@ -1,0 +1,116 @@
+---
+title: "Feature Selection"
+author: "DJL"
+date: "02/10/2016"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Split Data approach:
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(lumi)
+library(randomForest)
+library(lubridate)
+library(doMC)
+library(caret)
+library(plyr)
+library(dplyr)
+library(tableone)
+
+```
+
+
+##Set directories:
+```{r directory}
+
+P0_output_dir <-"./P0_Characterise/output/"
+P0_figs_dir <-"./P0_Characterise/figs/"
+
+```
+
+
+
+#Functions
+```{r define functions, tidy=TRUE}
+
+table_fun<- function(mldata,split){
+  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco")
+  catVars <- c("Ethnicity","Tobacco")
+  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("Phenotype"),includeNA = T)
+  table1print<-print(table1)
+  write.table(table1print, file=paste(P0_output_dir,split,"_Table_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+
+
+  listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+  catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
+  table2 <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,includeNA = T)
+  table2print<-print(table2)
+  write.table(table2print, file=paste(P0_output_dir,split,"_Table_2_Clinicalinformation.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+}
+```
+
+
+
+#Load Data
+```{r Load data}
+
+load(paste(P0_output_dir,"GAP_FEP_eset_linear_adj_Data.RData",sep=""))
+
+
+GX_lumi_object<-eset_linear_adj
+
+# remove duplicate probes and use gene symbols
+gene<- t(exprs(GX_lumi_object))
+probenames<-GX_lumi_object@featureData@data
+colnames(gene) <- probenames$TargetID
+gene_expression_matrix<-t(gene)
+exprs_data<-gene
+
+
+# pheno data
+names(pData(GX_lumi_object))
+pheno_data<-pData(GX_lumi_object)[,c(1,11:19,21:24)]
+
+```
+
+#Define Cores and Seed
+```{r Define Cores and Seed}
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+```
+
+
+##Split data
+```{r}
+set.seed(seed)
+#Add phenotype to Gene expression. 
+GX_DF<-droplevels(merge(pheno_data,exprs_data, by.x="sampleID",by.y="row.names"))
+row.names(GX_DF)<-GX_DF[,1]
+GX_DF[1:10,1:10]
+
+training_index <- createDataPartition(GX_DF$Phenotype, p = 0.70, list = F)
+
+training_df <- GX_DF[training_index,]
+testing_df <- GX_DF[-training_index,]
+
+#Make tables
+split="testing_df"
+table_fun(testing_df,split)
+split="training_df"
+table_fun(training_df,split)
+
+
+#Save results
+save(training_df, testing_df,file=paste(P0_output_dir,"Train_and_Test_data.Rdata",sep=""), compress = T)
+
+```

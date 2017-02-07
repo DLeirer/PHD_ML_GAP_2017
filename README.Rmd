@@ -34,7 +34,7 @@ proj/
 ├┬─ P4_Hybrid/  
 │├── figs/  
 │└── output/  
-├┬─ P5_XXXX/  
+├┬─ P101_Enrichment/  
 │├── figs/  
 │└── output/  
 ├── R/  
@@ -61,17 +61,20 @@ Also Cell Mix is performed to make sure everything is okay down the line. Furthe
 
 **Script_Strategy:**  
   
-1. *p0_CellMix_GAP_FEP_data_03_11_2016.Rmd*
+1. *p0_CellMix_GAP_FEP_data_07_02_2017.Rmd*
 + apply cellmix to identify poetential confounders from cell proportions. 
-1. *p0_characterise_GAP_FEP_data_03_11_2016.Rmd*
+2. *p0_characterise_GAP_FEP_data_07_02_2017.Rmd*
 + Characterise cohort. Plot demographics, make tables, do stats.
+2. *p0_Split_Data_GAP_FEP_data_07_02_2017.Rmd*
++ Define split for all subproject (80-20). make sure to do this using Sex, Age, Ethnicty.
+
 
 
 **Output:**  
 
 
 
-# Subproject 1: Diff Expression
+# Subproject 1: Hypothesis Free
 **Aims:**   
 Differential Expression adjusting for Ethnciity Age and Gender using Limma.
 
@@ -82,85 +85,25 @@ LumiBatch object.
 
 **Script_Strategy:**    
   
-1. *p1_limma_03_11_2016.Rmd*
+1. *p1_1_GAP_Feature_selection_07_02_2017.Rmd*
 + Script that does limma.  
-  
-
-**Output:**  
-List of expressed probes no duplicates for all samples.  
-List of unexpressed probes no duplicates.  
-Differentially Expressed Genes.
-Figures Volcano Plot.  
-
-
-# Subproject 2: WGCNA  
-
-**Aims:**   
-WGCNA to identify modules.
-
-**Input:**  
-Lumibatch Object  
-
-**Script_Strategy:**    
-
-
-1. *p2_WGCNA_03_11_16.Rmd*  
-+ Script for WGCNA.
+2. *p1_2_GAP_Machine_learning_07_02_2017.Rmd*
++ Script that screens for best model.  
++ Script also plots
+3. *p1_3_GAP_Tuning_07_02_2017.Rmd*
++ Script that tunes best 3 models.  
++ Validate in test data.  
+4. *p1_4_GAP_Variables_test_07_02_2017.Rmd*  
++ Check classied samples by PANSS, sex, ethnicty, age, tobacco, ICD10, medication.  
+4. *p1_5_GAP_Enrichment_test_07_02_2017.Rmd*  
++ Find most important genes.  
++ Check for enrichment in core genes.  
 
 
 **Output:**  
-Figures .  
-Files . 
 
 
 
-# Subproject 3: Enrichment
-
-**Aims:**   
-Enrichment of Diff Ex and WGCNA results.  
-
-**Input:**  
-Lumibatch Object  
-
-**Script_Strategy:**    
-
-
-1. *p3_ENRICHMENT_05_11_16.Rmd*  
-+ Script for userlistenrichment.
-
-
-**Output:**  
-Files.  
-Enrichment files.
-
-# Subproject 4: P4_Posthoc
-
-**Aims:**   
-Find what the impact of Medication and Tobacco and BMI is.  
-What genes are affected?
-Do Limma Ideally. 
-
-**Input:**  
-Lumibatch Object  
-
-**Script_Strategy:**    
-
-
-1. *p4_Posthoc_med_21_11_16.Rmd*  
-+ Script for userlistenrichment.
-
-
-**Output:**  
-Files.  
-Diff expression:  
-AF_vs_Con
-Ris_vs_Con
-Ola_vs_AF
-Ris_vs_AF
-Ris_vs_Ola
-Med_vs_AF_Con
-
-Enrichment files.  
 
 
 

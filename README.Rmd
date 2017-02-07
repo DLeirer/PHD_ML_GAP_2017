@@ -1,0 +1,259 @@
+---
+title: "README_diff_expression_Project"
+author: "DJL"
+date: "15/09/2016"
+output:
+  word_document: default
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Project Overview
+This Project is part of Daniel Leirer's PhD. I work primarily with the Genes and Psychosis data from the IoPPN. The aim is to create a classifer for Psychosis. 
+
+
+
+#Folder Structure
+
+proj/  
+├── P0_Characterise/  
+│├── figs/  
+│└── output/  
+├┬─ P1_Hypothesis_Free/  
+│├── figs/  
+│└── output/  
+├┬─ P2_Hypothesis_Driven/  
+│├── figs/  
+│└── output/  
+├┬─ P3_Enviromental/  
+│├── figs/  
+│└── output/  
+├┬─ P4_Hybrid/  
+│├── figs/  
+│└── output/  
+├┬─ P5_XXXX/  
+│├── figs/  
+│└── output/  
+├── R/  
+├── data/  
+└── doc/  
+
+---
+┼┘┐┌└├┤┴┬│─
+---
+
+**Directory Function:**  
+root directory = contains README and Project files for version control.  
+P0-PXX = subproject directories  
+figs = contains figures for subproject  
+output = contains output files from subproject.  
+R = Contains Scripts  
+data = contains all data (with exception of large data frames. Uploaded on Google Drive.)  
+doc = contains paper, labbook and other documentation.  
+
+# Subproject 0: Characterise
+**Aim**:  
+To make sure data is suitable for future steps, by giving overview of demographics and data available.
+Also Cell Mix is performed to make sure everything is okay down the line. Further we regress out Covariates at this step using a linear model. 
+
+**Script_Strategy:**  
+  
+1. *p0_CellMix_GAP_FEP_data_03_11_2016.Rmd*
++ apply cellmix to identify poetential confounders from cell proportions. 
+1. *p0_characterise_GAP_FEP_data_03_11_2016.Rmd*
++ Characterise cohort. Plot demographics, make tables, do stats.
+
+
+**Output:**  
+
+
+
+# Subproject 1: Diff Expression
+**Aims:**   
+Differential Expression adjusting for Ethnciity Age and Gender using Limma.
+
+
+**Input:**  
+LumiBatch object.  
+
+
+**Script_Strategy:**    
+  
+1. *p1_limma_03_11_2016.Rmd*
++ Script that does limma.  
+  
+
+**Output:**  
+List of expressed probes no duplicates for all samples.  
+List of unexpressed probes no duplicates.  
+Differentially Expressed Genes.
+Figures Volcano Plot.  
+
+
+# Subproject 2: WGCNA  
+
+**Aims:**   
+WGCNA to identify modules.
+
+**Input:**  
+Lumibatch Object  
+
+**Script_Strategy:**    
+
+
+1. *p2_WGCNA_03_11_16.Rmd*  
++ Script for WGCNA.
+
+
+**Output:**  
+Figures .  
+Files . 
+
+
+
+# Subproject 3: Enrichment
+
+**Aims:**   
+Enrichment of Diff Ex and WGCNA results.  
+
+**Input:**  
+Lumibatch Object  
+
+**Script_Strategy:**    
+
+
+1. *p3_ENRICHMENT_05_11_16.Rmd*  
++ Script for userlistenrichment.
+
+
+**Output:**  
+Files.  
+Enrichment files.
+
+# Subproject 4: P4_Posthoc
+
+**Aims:**   
+Find what the impact of Medication and Tobacco and BMI is.  
+What genes are affected?
+Do Limma Ideally. 
+
+**Input:**  
+Lumibatch Object  
+
+**Script_Strategy:**    
+
+
+1. *p4_Posthoc_med_21_11_16.Rmd*  
++ Script for userlistenrichment.
+
+
+**Output:**  
+Files.  
+Diff expression:  
+AF_vs_Con
+Ris_vs_Con
+Ola_vs_AF
+Ris_vs_AF
+Ris_vs_Ola
+Med_vs_AF_Con
+
+Enrichment files.  
+
+
+
+---
+####File template####
+File: ****  
+**  
+
+Description:  
+
+
+Source file name: 
+**  
+
+Source:  
+---
+
+##Genes and Psychosis (GAP)
+The Main Dataset is the Genes and Psychosis Data internal to the IoPPN.  
+The following files are associated to this Data.  
+
+File: **Full Gene Expression Object**  
+*GAP_FEP_Full_Gene_Expression_Data_Linear.RData*  
+Description:
+This file contains a lumibatch object with all probes deemed expressed. It is from the gene expression pre processing pipeline. Most probes here are defined as not expressed. It is First Episode Gap Samples, processed using background correction, log 2 transformed, robust spline normalisation. The following tech variables have been regressed out using a linear model:  
+ConcNanodrop, Dateout, concentrationoflabelledcRNA, DatecRNApurification  
+
+
+
+Source file name:  
+*FINAL_GAP_DL_FEP.eset_bg_log2_rsn_SVA_Good.RData*  
+Source:  
+Daniel Leirer  
+Daniel.Leirer@kcl.ac.uk
+
+
+##The following files are sources for various parts of the data in the Lumibatch Object
+
+File: **Demographic Data GAP**  
+*Basic_Demographics_GAP.csv*  
+
+Description:  
+Data approved by Marta Di Forti. Contains gene expression data, demographics etc. Age, Sex, Phenotype etc. 
+
+
+Source file name: 
+*GAP_full_final_expression_database_22_04_2015_Dan_Marta_consent.csv*  
+
+Source:  
+Daniel Leirer created this document.
+Information from various sources within GAP. 
+
+File: **GAP Master Database**  
+*GAP_large_demographic_database_16_Oct_2014.sav*  
+
+Description:  
+Huge database containing a lot of information including PANSS data. This is a secordary database. 
+
+Source file name: 
+*Master_database_GAP_UPDATE_16_Oct_2014.sav*  
+
+Source:  
+GAP team. Contact Robin Murray, Marta Di Forti, or people working in the Psychosis department. 
+
+
+File: **Medication Data**  
+*Daniel_RNA_DQ.csv*  
+
+Description:  
+Medication Data, Weight, Smoking, Some Demographics. 
+
+Source:  
+Diego Quattrone compiled this file. 
+diego.quattrone@kcl.ac.uk
+
+
+#Acknoledgements
+
+The Following people are involved in this project
+
+Name: Daniel Leirer
+Role: PhD Student
+Email: daniel.leirer@kcl.ac.uk
+
+Name: Dr. Stephen Newhouse
+Role: Main Supervisor
+Email: stephen.j.newhouse@gmail.com
+
+Name: Professor Richard Dobson
+Role: Primary Supervisor
+Email: richard.j.dobson@kcl.ac.uk
+
+Name: Sir Professor Robin Murray
+Role: Clinical Supervisor
+Email: N/A
+

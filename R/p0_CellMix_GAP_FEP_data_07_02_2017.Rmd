@@ -207,7 +207,7 @@ names(pData(eset_bg_log2_rsn_SVA_Good))
 save(eset_bg_log2_rsn_SVA_Good,file=paste(P0_output_dir,"GAP_FEP_small_Gene_Expression_Data.RData",sep=""))
 ```
 
-##Linear model to remove Age Ethnicity Sex and Blood differences:
+##Linear model to remove JUST Blood differences:
 ```{r, tidy=TRUE}
 #Input
 pData_rAESB<-pData(eset_bg_log2_rsn_SVA_Good)
@@ -215,7 +215,7 @@ exprs_rAESB<-exprs(eset_bg_log2_rsn_SVA_Good)
 
 str(pData_rAESB)
 
-mod = model.matrix(~Tc+neutro+as.factor(Gender)+Age+as.factor(Ethnicity),data=pData_rAESB)
+mod = model.matrix(~Tc+neutro,data=pData_rAESB)
 fit = lm.fit(mod,t(exprs_rAESB))
 #add residuals to average expression data
 exprs_res_cor_adj<-t(fit$residuals)+apply(exprs_rAESB,1,mean)

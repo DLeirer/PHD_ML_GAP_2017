@@ -1,0 +1,201 @@
+---
+title: "CellMix"
+author: "DJL"
+date: "17/02/2016"
+output:
+  word_document:
+    fig_height: 6
+---
+
+#CellMix approach:
+
+##Install and load Libraries:
+```{r Libraries, message=FALSE,warning=FALSE}
+rm(list = ls())
+dev.off()
+library(lumi)
+library(reshape)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(tableone)
+
+
+```
+
+
+##Set directories:
+```{r directory}
+
+data_dir <-"./data/"
+P0_output_dir <-"./P0_Characterise/output/"
+P0_figs_dir <-"./P0_Characterise/figs/"
+
+```
+
+##Load gene expression data (Should be LumiBatch object):
+```{r}
+
+lumidata<-"GAP_FEP_eset_linear_adj_Data.RData"
+load(paste(P0_output_dir,lumidata,sep=""))
+
+
+```
+
+
+##Demographics:
+```{r}
+
+
+phenodat<-pData(eset_linear_adj)
+
+#Table1: Demographics
+
+listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco")
+catVars <- c("Ethnicity","Tobacco")
+table1 <- CreateTableOne(vars = listVars, data = phenodat, factorVars = catVars,strata=c("Phenotype"),includeNA = T)
+table1print<-print(table1)
+write.table(table1print, file=paste(P0_output_dir,"Table_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+
+
+listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
+table2 <- CreateTableOne(vars = listVars2, data = filter(phenodat,Phenotype=="FEP"), factorVars = catVars2,includeNA = T)
+table2print<-print(table2)
+write.table(table2print, file=paste(P0_output_dir,"Table_2_Clinicalinformation.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+
+
+```
+
+#Visual Summary of data 
+```{r data summary}
+#gender 
+title = "Gender in FEP and Controls"
+ggplot(data = phenodat, aes(x = Phenotype, colour = Gender, fill = Gender)) +
+    geom_bar(alpha = 0.1)+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+#Age
+title = "Age differences between cases and controls"
+ggplot(data = phenodat, aes(x = Phenotype, y=Age, colour = Phenotype, fill = Phenotype)) +
+      geom_boxplot(alpha = 0)+
+      geom_jitter(alpha = 0.3)+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+#Age broken by gender
+title = "Gender and Age differences between cases and controls"
+ggplot(data = phenodat, aes(x = Phenotype, y=Age, colour = Phenotype, fill = Phenotype)) +
+      geom_boxplot(alpha = 0)+
+      facet_wrap(~ Gender)+
+      geom_jitter(alpha = 0.3)+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+
+#ethnicty 
+title = "Ethnicity breakdown"
+ggplot(data = phenodat, aes(x = Phenotype, colour = Gender, fill =Gender)) +
+    geom_bar(alpha = 0.1)+
+    facet_wrap(~ Ethnicity)+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+
+#bmi 
+title = "BMI differences between cases and controls"
+ggplot(data = phenodat, aes(x = Phenotype  , y = BMI, colour = Gender, fill =Gender)) +
+  geom_boxplot(alpha = 0.1)+
+  facet_wrap(~ Gender)+ 
+  geom_jitter(alpha = 0.3)+
+  ggtitle(title)
+
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+#bmi 
+title = "Medication and Weight"
+ggplot(data = filter(phenodat,Medication!="CONTROL"), 
+      aes(x = Medication, y=BMI  , colour = Medication)) +
+      geom_point() + 
+      geom_boxplot()+
+      coord_flip()+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+
+
+#tobacco
+title = "Smoking in cases and controls"
+ggplot(data = phenodat, 
+      aes(x = Tobacco, colour = Tobacco, fill =Tobacco))+
+      geom_bar(alpha = 0.1)+
+      facet_wrap(~ Phenotype)+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+filter(phenodat,Medication!="CONTROL")
+#medication 
+title = "Medication for FEP patients"
+ggplot(data = filter(phenodat,Medication!="CONTROL"), 
+      aes(x = Medication , colour = Medication)) +
+      geom_bar(alpha = 0.1)+
+      coord_flip()+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+```
+
+#Visual Summary of data 
+```{r data summary}
+#melt by panss
+phenodat_melt<-melt(phenodat, id = c("gap_id","SampleID","CHIP_ID","Phenotype","Gender","Age","Ethnicity","BMI","Tobacco","Medication","dsmiv.opcrit","icd10.opcrit","panss.date"))
+
+
+#PanssScore vs BMI 
+title = "Relationship of Panss and BMI"
+ggplot(data = filter(phenodat_melt,Phenotype!="control"), 
+      aes(x = BMI, y=value, colour = Gender, fill = Gender)) +
+      geom_point()+
+      facet_wrap(~ variable,scales="free")+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+#PanssScore vs Age vs Gender
+title = "Relationship of Panss and Age"
+ggplot(data = filter(phenodat_melt,Phenotype!="control"), 
+      aes(x = Age, y=value, colour = Gender, fill = Gender)) +
+      geom_point()+
+      facet_wrap(~ variable,scales="free")+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+#PanssScore vs Tobacco
+title = "Relationship of Panss and Tobacco"
+ggplot(data = filter(phenodat_melt,Phenotype!="control"), 
+      aes(x = Tobacco, y=value, colour = Gender, fill = Gender)) +
+      geom_boxplot(alpha = 0)+
+      geom_jitter(alpha = 0.3)+
+      facet_wrap(~ variable,scales="free")+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+#Panss Negative vs Panss Positive
+title = "Relationship of PanssNegative and PanssPositive"
+ggplot(data = filter(phenodat,Phenotype!="control"), 
+      aes(x = PanssPositive, y=PanssNegative, colour = Gender, fill = Gender)) +
+      geom_point()+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+```
+

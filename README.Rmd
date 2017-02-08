@@ -86,7 +86,7 @@ LumiBatch object.
 **Script_Strategy:**    
   
 1. *p1_1_GAP_Feature_selection_07_02_2017.Rmd*
-+ Script that does limma.  
++ Feature Selection
 2. *p1_2_GAP_Machine_learning_07_02_2017.Rmd*
 + Script that screens for best model.  
 + Script also plots

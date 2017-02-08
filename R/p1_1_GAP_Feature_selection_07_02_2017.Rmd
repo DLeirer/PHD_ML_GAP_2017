@@ -1,0 +1,128 @@
+---
+title: "Feature Selection"
+author: "DJL"
+date: "02/10/2016"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(lumi)
+library(randomForest)
+library(lubridate)
+library(doMC)
+library(caret)
+library(plyr)
+library(dplyr)
+
+
+```
+#Functions
+```{r define functions, tidy=TRUE}
+
+cor_fun<- function(gene_exprs_DF,...) {
+  # find highly correlated probes
+  correlationMatrix <- cor(gene_exprs_DF)
+  # find attributes that are highly corrected (ideally >0.75)
+  findCorrelation(correlationMatrix, cutoff=0.80)
+
+}
+
+
+rfe_fun<- function(rfe_df,...) {
+  # define the control using a random forest selection function
+  control <- rfeControl(functions=rfFuncs, method="cv", number=40,repeats=10)
+  # run the RFE algorithm
+  output <- rfe(rfe_df[,-1], rfe_df[,1], sizes=c(1:8), rfeControl=control)
+  output
+
+}
+
+
+```
+
+
+#Directories
+```{r Define directories}
+data_dir <-"./P0_Characterise/output/"
+P1_output_dir <-"./P1_Hypothesis_Free/output/"
+P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
+
+
+```
+
+#Load Data
+```{r Load data}
+
+
+load(file = paste(processed_data_dir,"pheno_data.RData",sep=""))
+load(file = paste(processed_data_dir,"exprs_data.RData",sep=""))
+
+
+```
+
+#Define Cores and Seed
+```{r Define Cores and Seed}
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+```
+
+
+##Split data
+```{r}
+
+Gap_Med_small<-GAP_Pheno_clean
+colnames(Gap_Med_small)[1]<-"CHIP_ID"
+Gap_Med_small$Phenotype<-as.factor(Gap_Med_small$Phenotype)
+
+exprs_data_small<-exprs(eset_bg_log2_rsn_SVA_Good)
+set.seed(seed)
+#Add phenotype to Gene expression. 
+GX_DF<-droplevels(merge(Gap_Med_small[,c("CHIP_ID","Phenotype")],t(exprs_data_small), by.x="CHIP_ID",by.y="row.names"))
+row.names(GX_DF)<-GX_DF[,1]
+GX_DF<-GX_DF[,-1]
+GX_DF[1:10,1:10]
+
+training_index <- createDataPartition(GX_DF$Phenotype, p = 0.8, list = F)
+
+training_df <- GX_DF[training_index,]
+testing_df <- GX_DF[-training_index,]
+
+```
+
+# Feature selection
+```{r feature selection}
+
+#find highly correlated probes set to 90 by default.
+highlyCorrelated<-cor_fun(training_df[,-1])
+# remove highly correlated probes
+training_cor_df<-training_df[,-c(highlyCorrelated+1)]
+
+dim(training_cor_df)
+
+control <- rfeControl(functions=rfFuncs, method="cv", number=40,repeats=10)
+# run the RFE algorithm
+output <- rfe(training_cor_df[,-1], training_cor_df[,1], sizes=c(1:8), rfeControl=control)
+results<-output
+
+
+#Run Random Forrest Feature selection
+rfe_results<-rfe_fun(training_cor_df)
+# list the chosen features
+rfepredictors<-predictors(results)
+
+#Gene Lists for LVQ and RFE
+save(rfepredictors,training_cor_df,testing_df,file=paste(P2_output_dir,"feature_selection_results_gap.Rdata",sep=""), compress = T)
+
+```
+

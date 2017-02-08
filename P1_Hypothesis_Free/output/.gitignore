@@ -9,3 +9,5 @@ training_df_Table_2_Clinicalinformation.tsv
 .~lock.testing_df_Table_1_Demographics.tsv#
 .~lock.testing_df_Table_2_Clinicalinformation.tsv#
 Train_and_Test_data.Rdata
+rfe_predictors.csv
+rfe_predictors_prepro.csv

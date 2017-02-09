@@ -100,6 +100,7 @@ gx_predictors <- as.data.frame(gx_predictors)
 subsets <- c(50,100,150,200,250,300)
 
 
+?rfFuncs
 #set seed
 set.seed(seed)
 #set control parameters 

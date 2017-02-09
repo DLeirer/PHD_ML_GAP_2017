@@ -140,6 +140,26 @@ Daniel Leirer
 Daniel.Leirer@kcl.ac.uk
 
 
+
+##The following data contains the Polygenic Risk scores from gap snp data  
+Polygenic risk score data.   
+The following files are associated to this Data.  
+
+File: **Full Gene Expression Object**  
+*GAP_FEP_Polygenic_Risk_scores.csv*  
+Description:
+This file contains the identifies of samples and corresponding polygenic risk scores. 
+
+
+
+
+Source file name:  
+*GAPsamples_Daniel_leirer_Polygenic_Risk_scores.csv*  
+Source:  
+Evangelos Vassos   
+evangelos.vassos@kcl.ac.uk
+
+
 ##The following files are sources for various parts of the data in the Lumibatch Object
 
 File: **Demographic Data GAP**  

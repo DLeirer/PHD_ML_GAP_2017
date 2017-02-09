@@ -38,6 +38,7 @@ P0_figs_dir <-"./P0_Characterise/figs/"
 
 lumidata<-"GAP_FEP_Full_Gene_Expression_Data_Linear.RData"
 load(paste(data_dir,lumidata,sep=""))
+PRS_data<-read.csv(paste(data_dir,"GAP_FEP_Polygenic_Risk_scores.csv",sep=""))
 
 
 ```
@@ -196,13 +197,17 @@ stats_pheno
 
 ```
 
-##Add TC and neutro to phenodata:
+##Add PRS, TC and neutro to phenodata:
 ```{r, tidy=TRUE}
 
 cor(reduced_probs_pheno[1:10])
 
+## add PRS
+reduced_probs_pheno_prs=merge(reduced_probs_pheno,PRS_data[,-c(2:3)],by="sampleID")
+names(reduced_probs_pheno_prs)
 
-pData(eset_bg_log2_rsn_SVA_Good)<-reduced_probs_pheno[,c(11:71,1,10)]
+
+pData(eset_bg_log2_rsn_SVA_Good)<-reduced_probs_pheno_prs[,c(11:71,1,10,72:81)]
 names(pData(eset_bg_log2_rsn_SVA_Good))
 save(eset_bg_log2_rsn_SVA_Good,file=paste(P0_output_dir,"GAP_FEP_small_Gene_Expression_Data.RData",sep=""))
 ```

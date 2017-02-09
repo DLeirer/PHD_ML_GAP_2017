@@ -94,7 +94,7 @@ LumiBatch object.
 + Script that tunes best 3 models.  
 + Validate in test data.  
 4. *p1_4_GAP_Variables_test_07_02_2017.Rmd*  
-+ Check classied samples by PANSS, sex, ethnicty, age, tobacco, ICD10, medication.  
++ Check classied samples by PANSS, sex, ethnicty, age, tobacco, ICD10, medication and PRS.  
 4. *p1_5_GAP_Enrichment_test_07_02_2017.Rmd*  
 + Find most important genes.  
 + Check for enrichment in core genes.  

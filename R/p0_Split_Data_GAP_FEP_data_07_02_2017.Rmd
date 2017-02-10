@@ -39,8 +39,8 @@ P0_figs_dir <-"./P0_Characterise/figs/"
 #Functions
 ```{r define functions, tidy=TRUE}
 
-table_fun<- function(mldata,split){
-  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco")
+table_fun<- function(mldata,split,prs_col=prs_col){
+  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(mldata)[65:73])
   catVars <- c("Ethnicity","Tobacco")
   table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("Phenotype"),includeNA = T)
   table1print<-print(table1)
@@ -75,8 +75,8 @@ exprs_data<-gene
 
 # pheno data
 names(pData(GX_lumi_object))
-pheno_data<-pData(GX_lumi_object)[,c(1,11:19,21:24)]
-
+pheno_data<-pData(GX_lumi_object)[,c(6,9,62,11:19,21:24,1,65:73)]
+names(pheno_data)
 ```
 
 #Define Cores and Seed
@@ -93,6 +93,8 @@ set.seed(seed)
 ##Split data
 ```{r}
 set.seed(seed)
+
+names(pheno_data)
 #Add phenotype to Gene expression. 
 GX_DF<-droplevels(merge(pheno_data,exprs_data, by.x="sampleID",by.y="row.names"))
 row.names(GX_DF)<-GX_DF[,1]
@@ -103,11 +105,13 @@ training_index <- createDataPartition(GX_DF$Phenotype, p = 0.70, list = F)
 training_df <- GX_DF[training_index,]
 testing_df <- GX_DF[-training_index,]
 
+
+
 #Make tables
 split="testing_df"
-table_fun(testing_df,split)
+table_fun(testing_df,split,prs_col=(21:26))
 split="training_df"
-table_fun(training_df,split)
+table_fun(training_df,split,prs_col=(21:26))
 
 
 #Save results

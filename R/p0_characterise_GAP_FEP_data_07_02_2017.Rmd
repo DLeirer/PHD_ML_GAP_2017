@@ -45,13 +45,13 @@ load(paste(P0_output_dir,lumidata,sep=""))
 
 ##Demographics:
 ```{r}
-
+str(phenodat)
 
 phenodat<-pData(eset_linear_adj)
 
 #Table1: Demographics
 
-listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco")
+listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(phenodat)[65:73])
 catVars <- c("Ethnicity","Tobacco")
 table1 <- CreateTableOne(vars = listVars, data = phenodat, factorVars = catVars,strata=c("Phenotype"),includeNA = T)
 table1print<-print(table1)
@@ -151,13 +151,37 @@ ggplot(data = filter(phenodat,Medication!="CONTROL"),
 ggsave(paste(P0_figs_dir,title,".png",sep=""))
 
 
+names(phenodat)
+#medication 
+title = "Medication vs PRS"
+ggplot(data = filter(phenodat,Medication!="CONTROL"), 
+      aes(x = Medication, y=Pol_0.05_GAP_all_strict_excl_WTCCC2  , colour = Medication)) +
+      geom_point() + 
+      geom_boxplot()+
+      coord_flip()+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+#medication vs PRS
+title = "Medication vs PRS"
+ggplot(data = filter(phenodat,Medication!="CONTROL"), 
+      aes(x = Medication, y=Pol_0.05_GAP_all_strict_excl_WTCCC2  , colour = Medication)) +
+      geom_point() + 
+      geom_boxplot()+
+      coord_flip()+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+
+
 ```
 
 #Visual Summary of data 
 ```{r data summary}
 #melt by panss
-phenodat_melt<-melt(phenodat, id = c("gap_id","SampleID","CHIP_ID","Phenotype","Gender","Age","Ethnicity","BMI","Tobacco","Medication","dsmiv.opcrit","icd10.opcrit","panss.date"))
-
+phenodat_melt<-melt(phenodat, id = c("gap_id","SampleID","sampleID","Phenotype","Gender","Age","Ethnicity","BMI","Pol_0.05_GAP_all_strict_excl_WTCCC2","Tobacco","Medication","dsmiv.opcrit","icd10.opcrit","panss.date"))
+str(phenodat)
 
 #PanssScore vs BMI 
 title = "Relationship of Panss and BMI"
@@ -184,7 +208,7 @@ ggplot(data = filter(phenodat_melt,Phenotype!="control"),
       aes(x = Tobacco, y=value, colour = Gender, fill = Gender)) +
       geom_boxplot(alpha = 0)+
       geom_jitter(alpha = 0.3)+
-      facet_wrap(~ variable,scales="free")+
+      #facet_wrap(~ variable,scales="free")+
       ggtitle(title)
 ggsave(paste(P0_figs_dir,title,".png",sep=""))
 

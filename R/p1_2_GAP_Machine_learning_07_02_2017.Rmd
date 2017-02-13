@@ -79,7 +79,7 @@ ml_fun<- function(dataset) {
 
 #Directories
 ```{r Define directories}
-
+data_dir <-"./P0_Characterise/output/"
 P1_output_dir <-"./P1_Hypothesis_Free/output/"
 P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
 
@@ -88,7 +88,8 @@ P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
 #Load Data
 ```{r Load data}
 
-load(file=paste(P2_output_dir,"feature_selection_results_gap.Rdata",sep=""))
+load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
+load(file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
 
 ```
@@ -105,12 +106,16 @@ set.seed(seed)
 #Control for algorithms
 control <- trainControl(method="repeatedcv", number=10, repeats=10, sampling="down", savePredictions="all") ## Steve added sampling argument. READ!!
 
-
 #Define Metric to choose best model
 metric <- "Accuracy"
 
+opt_rfepredictors<-predictors(rfe_output)
+
+
 #input data frame
-expressionRFE<-training_cor_df[,c("Phenotype",rfepredictors[1:500])]
+expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
+
+
 
 ```
 
@@ -121,7 +126,7 @@ expressionRFE<-training_cor_df[,c("Phenotype",rfepredictors[1:500])]
 ml_models<-ml_fun(expressionRFE)
 
 #Save Models
-save(ml_models, file=paste(P2_output_dir,"Classification_models.rdata",sep=""), compress = T)
+save(ml_models, file=paste(P1_output_dir,"Classification_models.rdata",sep=""), compress = T)
 
 ```
 

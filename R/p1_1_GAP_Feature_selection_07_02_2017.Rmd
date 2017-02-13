@@ -69,12 +69,15 @@ set.seed(seed)
 ```{r feature selection}
 
 #Define number of columns not corresponding to Probes (HAVE TO BE AT THE START of data)
-Non_Probes=14 
+Non_Probes=26 
 
 #make dataset of features that are not probes for backup and later use.
 training_df_np = training_df[,c(1:Non_Probes)]
-training_df = training_df[,-c(1,3:Non_Probes)]
-
+names(training_df_np)
+str(training_df_np)
+#ONLY KEEP PHENOTYPE
+training_df = training_df[,-c(1:4,6:Non_Probes)]
+names(training_df)[1:30]
 #find highly correlated probes set to 80 by default.
 highlyCorrelated<-cor_fun(training_df[,-c(1)],cor_cutoff=0.8)
 highlyCorrelated
@@ -89,7 +92,8 @@ dim(training_cor_df)
 
 ############## Recursive Feature Elimnation ###################
 ### Define Class Labels
-class_labels <- as.factor(training_cor_df[,1])
+class_labels <- droplevels(as.factor(training_cor_df[,1]))
+
 
 ### Normalise
 gx_predictors=training_cor_df[,-1]
@@ -100,7 +104,6 @@ gx_predictors <- as.data.frame(gx_predictors)
 subsets <- c(50,100,150,200,250,300)
 
 
-?rfFuncs
 #set seed
 set.seed(seed)
 #set control parameters 
@@ -110,15 +113,12 @@ control <- rfeControl(functions=rfFuncs, #Random Forrest based
                       repeats=20, #10 repeats
                       verbose = FALSE)
 
-
-
 # run the RFE algorithm
 rfe_output <- rfe(gx_predictors, class_labels, sizes=subsets, rfeControl=control)
 rfe_output_prepro<-rfe_output
-rfe_output <- rfe(training_cor_df[,-1], class_labels, sizes=subsets, rfeControl=control)
-
+rfe_output <- rfe(x=training_cor_df[,-1], y=class_labels, sizes=subsets, rfeControl=control)
 #Save output files
-save(rfe_output, rfe_output_prepro, file=paste(P1_output_dir,"Train_and_Test_data.Rdata",sep=""), compress = T)
+save(rfe_output, rfe_output_prepro, file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""), compress = T)
 
 ```
 

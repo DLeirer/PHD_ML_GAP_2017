@@ -152,8 +152,8 @@ accuracy_plot<-as.data.frame(Accuracy_results)
 accuracy_plot$Algorithm<-row.names(accuracy_plot)
 ggplot(accuracy_plot,
   aes(x=Accuracy_results,y=Algorithm,color=Algorithm)) +
-  geom_point() 
-  ggtitle("Comparison of average accuracy of Gene lists")
+  geom_point()+ 
+  ggtitle("Average accuracy of 10x10-fold cross validation for 11 Models")
 ggsave(paste(P1_figs_dir,"Dotplot_comparing_models_Hypothesis_Free.png",sep=""))
 
 
@@ -166,14 +166,14 @@ accuracy_plot$Datasets<-c("RFE(GAP)")
 accuracy_plot2<-melt(accuracy_plot, id="Datasets")
 colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
 
+table(accuracy_plot2[,3])
 
 ggplot(accuracy_plot2,
   aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
   geom_point() + 
   geom_boxplot()+
   coord_flip()+
-  ggtitle("Results for all Hypothesis free Gene list with all CV results")
-
+  ggtitle("Accuracy of 10x10-fold cross validation for 11 Models")
 ggsave(paste(P1_figs_dir,"Dotplot_comparing_CV_hypothesis_free.png",sep=""))
 
 

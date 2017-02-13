@@ -75,7 +75,6 @@ exprsmean_ids_unique<-exprsmean_ids[!duplicated(exprsmean_ids$TargetID),]
 exprs_into_lumibatch2<-exprs_into_lumibatch[exprsmean_ids_unique$Row.names,]
 
 good_fdata_small<-good_fdata[exprsmean_ids_unique$Row.names,]
-
 #check they are same order
 all.equal(good_fdata_small$nuID,rownames(exprs_into_lumibatch2))
 
@@ -204,8 +203,10 @@ cor(reduced_probs_pheno[1:10])
 
 ## add PRS
 reduced_probs_pheno_prs=merge(reduced_probs_pheno,PRS_data[,-c(2:3)],by="sampleID")
-names(reduced_probs_pheno_prs)
-
+names(reduced_probs_pheno)
+names(reduced_probs_pheno_prs[,c(2:11,1,12:81)])
+#Get everything in the right order
+reduced_probs_pheno_prs<-reduced_probs_pheno_prs[,c(2:11,1,12:81)]
 
 pData(eset_bg_log2_rsn_SVA_Good)<-reduced_probs_pheno_prs[,c(11:71,1,10,72:81)]
 names(pData(eset_bg_log2_rsn_SVA_Good))
@@ -218,7 +219,6 @@ save(eset_bg_log2_rsn_SVA_Good,file=paste(P0_output_dir,"GAP_FEP_small_Gene_Expr
 pData_rAESB<-pData(eset_bg_log2_rsn_SVA_Good)
 exprs_rAESB<-exprs(eset_bg_log2_rsn_SVA_Good)
 
-str(pData_rAESB)
 
 mod = model.matrix(~Tc+neutro,data=pData_rAESB)
 fit = lm.fit(mod,t(exprs_rAESB))
@@ -228,13 +228,13 @@ exprs_res_cor_adj[1:10,1:10]
 
 
 #make Lumibatch
-exprs_into_lumibatch<-exprs_res_cor_adj
+exprs_into_lumibatch2<-exprs_res_cor_adj
 #check they are same order
-all.equal(rownames(fData(eset_bg_log2_rsn_SVA_Good)),rownames(exprs_into_lumibatch))
+all.equal(rownames(fData(eset_bg_log2_rsn_SVA_Good)),rownames(exprs_into_lumibatch2))
 #LUMIBATCH made
 eset_linear_adj<-eset_bg_log2_rsn_SVA_Good
 #Expression data put in
-exprs(eset_linear_adj)<-exprs_into_lumibatch
+exprs(eset_linear_adj)<-exprs_into_lumibatch2
 
 #save
 save(eset_linear_adj,file=paste(P0_output_dir,"GAP_FEP_eset_linear_adj_Data.RData",sep=""))

@@ -39,8 +39,6 @@ P0_figs_dir <-"./P0_Characterise/figs/"
 #Functions
 ```{r define functions, tidy=TRUE}
 
-?CreateTableOne
-
 table_fun<- function(mldata,split,prs_col=prs_col){
   listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(mldata)[prs_col])
   catVars <- c("Ethnicity","Tobacco")
@@ -73,7 +71,7 @@ probenames<-GX_lumi_object@featureData@data
 colnames(gene) <- probenames$TargetID
 gene_expression_matrix<-t(gene)
 exprs_data<-gene
-
+dim(exprs_data)
 
 # pheno data
 names(pData(GX_lumi_object))

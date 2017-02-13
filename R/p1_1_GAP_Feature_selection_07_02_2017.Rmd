@@ -119,6 +119,7 @@ rfe_output_prepro<-rfe_output
 rfe_output <- rfe(x=training_cor_df[,-1], y=class_labels, sizes=subsets, rfeControl=control)
 #Save output files
 save(rfe_output, rfe_output_prepro, file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""), compress = T)
+load(paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
 ```
 
@@ -144,7 +145,7 @@ write.table(rfepredictors_prepro, file=paste(P1_output_dir,"rfe_predictors_prepr
 
 # save Plot of different predictor sizes and accuracy.
 jpeg(paste(P1_figs_dir,"RFE_SC.jpg"))
-plot(rfe_output_prepro, type = c("l"),col="red", main="Recursive Feature Elimination (Scaled / Centered)")
+plot(rfe_output_prepro, type = c("g", "o"),col="red", main="Recursive Feature Elimination (Scaled / Centered)")
 dev.off()
 jpeg(paste(P1_figs_dir,"RFE.jpg"))
 plot(rfe_output, type = c("g", "o"),col="green",main="Recursive Feature Elimination")

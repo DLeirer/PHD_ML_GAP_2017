@@ -1,0 +1,127 @@
+---
+title: "Machine Learning"
+author: "DJL"
+date: "02/10/2016"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Overview
+
+**Aim**  
+Create Machine learning models using GAP data. 
+
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(plyr)
+library(dplyr)
+library(randomForest)
+library(lubridate)
+library(doMC)
+library(caret)
+
+```
+
+#Functions
+```{r define functions, tidy=TRUE}
+
+#all machine learning models
+ml_fun<- function(dataset) {
+  # Linear Discriminant Analysis
+  set.seed(seed)
+  fit.lda <- train(Phenotype~., data=dataset, method="lda", metric=metric, preProc=c("center", "scale"), trControl=control)
+  # Logistic Regression
+  set.seed(seed)
+  fit.glm <- train(Phenotype~., data=dataset, method="glm", metric=metric, trControl=control)
+  # GLMNET
+  set.seed(seed)
+  fit.glmnet <- train(Phenotype~., data=dataset, method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control)
+  # SVM Radial
+  set.seed(seed)
+  fit.svmRadial <- train(Phenotype~., data=dataset, method="svmRadial", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
+  # SVM Poly
+  set.seed(seed)
+  fit.svmPoly <- train(Phenotype~., data=dataset, method="svmPoly", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
+  # SVM Linear
+  set.seed(seed)
+  fit.svmLinear <- train(Phenotype~., data=dataset, method="svmLinear2", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
+  # kNN
+  set.seed(seed)
+  fit.knn <- train(Phenotype~., data=dataset, method="knn", metric=metric, preProc=c("center", "scale"), trControl=control)
+  # Naive Bayes
+  set.seed(seed)
+  fit.nb <- train(Phenotype~., data=dataset, method="nb", metric=metric, trControl=control)
+  # C5.0
+  set.seed(seed)
+  fit.c50 <- train(Phenotype~., data=dataset, method="C5.0", metric=metric, trControl=control)
+  # Random Forest
+  set.seed(seed)
+  fit.rf <- train(Phenotype~., data=dataset, method="rf", metric=metric, trControl=control)
+  # Stochastic Gradient Boosting (Generalized Boosted Modeling)
+  set.seed(seed)
+  fit.gbm <- train(Phenotype~., data=dataset, method="gbm", metric=metric, trControl=control, verbose=FALSE)
+
+  ##Make List of models
+  modellist<-list(lda=fit.lda, logistic=fit.glm, glmnet=fit.glmnet,svmRad=fit.svmRadial,svmPoly=fit.svmPoly,svmLinear=fit.svmLinear, knn=fit.knn, nb=fit.nb,c50=fit.c50, rf=fit.rf, gbm=fit.gbm)
+  modellist
+}
+
+
+
+
+```
+
+
+#Directories
+```{r Define directories}
+
+P1_output_dir <-"./P1_Hypothesis_Free/output/"
+P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
+
+```
+
+#Load Data
+```{r Load data}
+
+load(file=paste(P2_output_dir,"feature_selection_results_gap.Rdata",sep=""))
+
+
+```
+
+#Configure
+```{r Define Cores and Seed}
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=10, repeats=10, sampling="down", savePredictions="all") ## Steve added sampling argument. READ!!
+
+
+#Define Metric to choose best model
+metric <- "Accuracy"
+
+#input data frame
+expressionRFE<-training_cor_df[,c("Phenotype",rfepredictors[1:500])]
+
+```
+
+# Machine Learning
+```{r feature selection}
+
+#Warning will use a lot of resources and take a long time. Output is a list of machine learning models. 
+ml_models<-ml_fun(expressionRFE)
+
+#Save Models
+save(ml_models, file=paste(P2_output_dir,"Classification_models.rdata",sep=""), compress = T)
+
+```
+

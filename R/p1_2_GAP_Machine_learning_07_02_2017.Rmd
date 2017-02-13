@@ -24,6 +24,7 @@ library(randomForest)
 library(lubridate)
 library(doMC)
 library(caret)
+library(reshape)
 
 ```
 
@@ -130,3 +131,50 @@ save(ml_models, file=paste(P1_output_dir,"Classification_models.rdata",sep=""), 
 
 ```
 
+
+
+# PLotting
+```{r Plotting of results}
+
+###########################Use classification_model_script_gap_and_impact.rmd
+
+
+#extract accuracy Models
+ml_resample<-resamples(ml_models)
+Acc_results<-ml_resample$values[,grep("*Accuracy",colnames(ml_resample$values))]
+
+## Plot 
+
+#single point
+Accuracy_results<-sapply(Acc_results,mean)
+accuracy_plot<-as.data.frame(Accuracy_results)
+accuracy_plot<-as.data.frame(Accuracy_results)
+accuracy_plot$Algorithm<-row.names(accuracy_plot)
+ggplot(accuracy_plot,
+  aes(x=Accuracy_results,y=Algorithm,color=Algorithm)) +
+  geom_point() 
+  ggtitle("Comparison of average accuracy of Gene lists")
+ggsave(paste(P1_figs_dir,"Dotplot_comparing_models_Hypothesis_Free.png",sep=""))
+
+
+results<-ml_resample
+
+#all points
+Accuracy_results<-ml_resample$values[,grep("*Accuracy",colnames(ml_resample$values))]
+accuracy_plot<-Accuracy_results[,row.names(as.matrix(sort(sapply(Accuracy_results,mean),decreasing = F)))]
+accuracy_plot$Datasets<-c("RFE(GAP)")
+accuracy_plot2<-melt(accuracy_plot, id="Datasets")
+colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
+
+
+ggplot(accuracy_plot2,
+  aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
+  geom_point() + 
+  geom_boxplot()+
+  coord_flip()+
+  ggtitle("Results for all Hypothesis free Gene list with all CV results")
+
+ggsave(paste(P1_figs_dir,"Dotplot_comparing_CV_hypothesis_free.png",sep=""))
+
+
+```

@@ -23,34 +23,6 @@ library(reshape)
 
 ```
 
-#Functions
-```{r define functions, tidy=TRUE}
-
-#all machine learning models
-ml_fun<- function(dataset) {
-  # SVM Poly
-  set.seed(seed)
-  fit.svmPoly <- train(Phenotype~., data=dataset, method="svmPoly", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
-  # SVM Linear
-  set.seed(seed)
-  fit.svmLinear <- train(Phenotype~., data=dataset, method="svmLinear2", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
-  # Random Forest
-  set.seed(seed)
-  fit.rf <- train(Phenotype~., data=dataset, method="rf", metric=metric, trControl=control)
-  # Stochastic Gradient Boosting (Generalized Boosted Modeling)
-  set.seed(seed)
-  fit.gbm <- train(Phenotype~., data=dataset, method="gbm", metric=metric, trControl=control, verbose=FALSE)
-  ##Make List of models
-  modellist<-list(svmPoly=fit.svmPoly, rf=fit.rf, gbm=fit.gbm)
-  modellist
-}
-
-
-
-
-```
-
-
 
 #Directories
 ```{r Define directories}
@@ -78,25 +50,6 @@ registerDoMC(cores = 8) # Note that there might be minor issues with reproducibi
 seed = 7
 set.seed(seed)
 
-###### Control for algorithms #########
-# Random Forrest
-rfcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid", sampling="down", savePredictions="all")
-rftunegrid <- expand.grid(.mtry=(1:20)*2)
-
-rfcontrol_random <- trainControl(method="repeatedcv", number=10, repeats=3,search="random", sampling="down", savePredictions="all")
-rftunegrid <- sqrt(ncol(x))
-
-# Random Search
-control <- trainControl(method="repeatedcv", number=10, repeats=3, search="random")
-set.seed(seed)
-mtry <- sqrt(ncol(x))
-rf_random <- train(Class~., data=dataset, method="rf", metric=metric, tuneLength=15, trControl=control)
-print(rf_random)
-plot(rf_random)
-
-# GBM
-GBMcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
-
 
 #Define Metric to choose best model
 metric <- "Accuracy"
@@ -107,55 +60,41 @@ opt_rfepredictors<-predictors(rfe_output)
 
 #input data frame
 expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
-#expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors[1:50])]
-
 
 ```
 
 #Random Forrest Tuning
 ```{r Random Forrest Tuning}
 
+#Random Forrest
+rfcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid", sampling="down", savePredictions="all")
+rftunegrid <- expand.grid(.mtry=(1:30))
 
 
 #Run Parameter Search.
 set.seed(seed)
 RF_search <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, tuneGrid=rftunegrid, trControl=rfcontrol) 
-#takes around 15 minutes with 8 cores and 60 runs at 30 x cross validation. 
 
 #Summary and Plot. 
 RF_search
-
-ggplot(RF_search)  
-ggplot(RF_search, metric = "Kappa")  
-
 
 ```
 
 #Stochastic Gradient Boosting, Parameter Search
 ```{r GBM Parameter Search}
 
+# GBM
+GBMcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
+
+
 #tuning grid GBM
-gbmGrid <-  expand.grid(interaction.depth = (1:10)*3, n.trees = (1:20)*100, shrinkage = 0.1, n.minobsinnode = 20)
+gbmGrid <-  expand.grid(interaction.depth = ((1:8)*2)-1, n.trees = (1:20)*100, shrinkage = 0.1, n.minobsinnode = 20)
 
 #Set seed and run model
 set.seed(seed)
 gbmFit <- train(Phenotype ~ ., data = expressionRFE, method = "gbm", metric = metric, trControl = GBMcontrol, verbose = FALSE,tuneGrid = gbmGrid)
 gbmFit
 
-
-ggplot(gbmFit)  
-ggplot(gbmFit, metric = "Kappa")  
-
-
-
-
-trellis.par.set(caretTheme())
-plot(gbmFit, metric = metric, plotType = "level",
-     scales = list(x = list(rot = 90)))
-
-trellis.par.set(caretTheme())
-plot(gbmFit, metric = "Kappa", plotType = "level",
-     scales = list(x = list(rot = 90)))
 
 ```
 
@@ -164,31 +103,113 @@ plot(gbmFit, metric = "Kappa", plotType = "level",
 ```{r SVMpoly Parameter Search}
 
 
-#tuning grid GBM
+#tuning grid SVMpoly
 svmControl <- trainControl(method="repeatedcv", number=10, repeats=3,search="random", sampling="down", savePredictions="all")
 svmGrid <-  expand.grid(degree = 3, scale = c(4^(-5:2)),C = c(4^(-2:5)))
 
 #Set seed and run model
 svmPolyFit <- train(Phenotype ~ ., data = expressionRFE, method = "svmPoly", metric = metric, trControl = svmControl, verbose = FALSE, preProc = c("center", "scale"), tuneGrid = svmGrid )
-
-
 svmPolyFit
 
+
+#Grid search broad search
 trellis.par.set(caretTheme())
-plot(svmPolyFit, metric = metric, plotType = "level",
-     scales = list(x = list(rot = 90)))
-trellis.par.set(caretTheme())
-plot(svmPolyFit, metric = "Kappa", plotType = "level",
-     scales = list(x = list(rot = 90)))
+
+
+#tuning grid SVMpoly second round informed by Grid search
+svmGrid <-  expand.grid(degree = 3, scale = c(2^(-10:-4)),C = c(2^(-3:6)))
+
+#Set seed and run model
+svmPolyFit2 <- train(Phenotype ~ ., data = expressionRFE, method = "svmPoly", metric = metric, trControl = svmControl, verbose = FALSE, preProc = c("center", "scale"), tuneGrid = svmGrid )
+class(svmPolyFit2)
+
 
 
 ```
 
+#Plot for models
+```{r plots}
 
-#Compare models
+################## RF  ############################  
+
+ggplot(RF_search)+
+  ggtitle("Random Forrest 3x10-fold cross validated search for best predictor by Accuracy")
+ggsave(paste(P1_figs_dir,"p1_3_RF_accuracy_.png",sep=""))
+
+ggplot(RF_search, metric = "Kappa")+
+  ggtitle("Random Forrest 3x10-fold cross validated search for best predictor by Kappa")
+ggsave(paste(P1_figs_dir,"p1_3_RF_Kappa_.png",sep=""))
+
+
+################## GBM  ############################ 
+#Grid search broad search. 
+
+
+ggplot(gbmFit)+ggtitle("Stochastic Gradient Boosting Grid Search by Accuracy")
+ggsave(paste(P1_figs_dir,"p1_3_GBM_accuracy_.png",sep=""))
+
+ggplot(gbmFit, metric = "Kappa")+ggtitle("Stochastic Gradient Boosting Grid Search by Kappa")
+ggsave(paste(P1_figs_dir,"p1_3_GBM_Kappa_.png",sep=""))
+
+
+
+jpeg(paste(P1_figs_dir,"p1_3_GBM_Accuracy_heatmap.jpg"))
+trellis.par.set(caretTheme())
+plot(gbmFit, metric = metric, plotType = "level",
+     scales = list(x = list(rot = 90)),main="Stochastic Gradient Boosting Grid Search Results (Accuracy)")
+dev.off()
+
+jpeg(paste(P1_figs_dir,"p1_3_GBM_Kappa_heatmap.jpg"))
+trellis.par.set(caretTheme())
+plot(gbmFit, metric = "Kappa", plotType = "level",
+     scales = list(x = list(rot = 90)),main="Stochastic Gradient Boosting Grid Search Results (Kappa)")
+dev.off()
+
+
+
+################## SVM poly ############################ 
+#Grid search broad search. 
+
+
+jpeg(paste(P1_figs_dir,"p1_3_svmPoly_Accuracy_screen_heatmap.jpg"))
+trellis.par.set(caretTheme())
+plot(svmPolyFit, metric = metric, plotType = "level",
+     scales = list(x = list(rot = 90)),main="SVM Polynomial intial Grid Search Results (Accuracy)")
+dev.off()
+
+jpeg(paste(P1_figs_dir,"p1_3_svmPoly_Kappa_screen_heatmap.jpg"))
+trellis.par.set(caretTheme())
+plot(svmPolyFit, metric = "Kappa", plotType = "level",
+     scales = list(x = list(rot = 90)),main="SVM Polynomial initial Grid Search Results (Kappa)")
+dev.off()
+
+#Grid search closer look. 
+
+jpeg(paste(P1_figs_dir,"p1_3_svmPoly_Accuracy_final_heatmap.jpg"))
+trellis.par.set(caretTheme())
+plot(svmPolyFit2, metric = metric, plotType = "level",
+     scales = list(x = list(rot = 90)),main="SVM Polynomial Final Grid Search Results (Accuracy)")
+dev.off()
+
+jpeg(paste(P1_figs_dir,"p1_3_svmPoly_Kappa_final_heatmap.jpg"))
+trellis.par.set(caretTheme())
+plot(svmPolyFit2, metric = "Kappa", plotType = "level",
+     scales = list(x = list(rot = 90)),main="SVM Polynomial Final Grid Search Results (Kappa)")
+dev.off()
+
+```
+
+#Create best performing models
+```{r Compare}
+
+
+```
+
+#Compare best models
 ```{r Compare}
 resamps <- resamples(list(GBM = gbmFit,
-                          RF = RF_search))
+                          RF = RF_search,
+                          svmPoly = svmPolyFit2))
 resamps
 summary(resamps)
 trellis.par.set(theme1)
@@ -209,33 +230,13 @@ bwplot(difValues, layout = c(2, 1))
 
 trellis.par.set(caretTheme())
 dotplot(difValues)
+
+ggplot(difValues)
 
 ```
 
 #Save all models for reference
 ```{r save}
-resamps <- resamples(list(GBM = gbmFit,
-                          RF = RF_search))
-resamps
-summary(resamps)
-trellis.par.set(theme1)
-bwplot(resamps, layout = c(2, 1))
-
-trellis.par.set(caretTheme())
-dotplot(resamps, metric = "Accuracy")
-trellis.par.set(theme1)
-xyplot(resamps, what = "BlandAltman")
-splom(resamps)
-
-difValues <- diff(resamps)
-difValues
-summary(difValues)
-
-trellis.par.set(caretTheme())
-bwplot(difValues, layout = c(2, 1))
-
-trellis.par.set(caretTheme())
-dotplot(difValues)
 
 ```
 

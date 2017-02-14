@@ -135,11 +135,11 @@ ggplot(RF_search, metric = "Kappa")
 ```{r GBM Parameter Search}
 
 #tuning grid GBM
-gbmGrid <-  expand.grid(interaction.depth = (1:10)*3, n.trees = (1:15)*100, shrinkage = 0.1, n.minobsinnode = 20)
+gbmGrid <-  expand.grid(interaction.depth = (1:10)*3, n.trees = (1:20)*100, shrinkage = 0.1, n.minobsinnode = 20)
 
 #Set seed and run model
 set.seed(seed)
-gbmFit <- train(Phenotype ~ ., data = expressionRFE, method = "gbm",trControl = GBMcontrol, verbose = FALSE,tuneGrid = gbmGrid)
+gbmFit <- train(Phenotype ~ ., data = expressionRFE, method = "gbm", metric = metric, trControl = GBMcontrol, verbose = FALSE,tuneGrid = gbmGrid)
 gbmFit
 
 
@@ -150,6 +150,10 @@ ggplot(gbmFit, metric = "Kappa")
 
 
 trellis.par.set(caretTheme())
+plot(gbmFit, metric = metric, plotType = "level",
+     scales = list(x = list(rot = 90)))
+
+trellis.par.set(caretTheme())
 plot(gbmFit, metric = "Kappa", plotType = "level",
      scales = list(x = list(rot = 90)))
 
@@ -158,6 +162,24 @@ plot(gbmFit, metric = "Kappa", plotType = "level",
 
 #SVM Poly, Parameter Search
 ```{r SVMpoly Parameter Search}
+
+
+#tuning grid GBM
+svmControl <- trainControl(method="repeatedcv", number=10, repeats=3,search="random", sampling="down", savePredictions="all")
+svmGrid <-  expand.grid(degree = 3, scale = c(4^(-5:2)),C = c(4^(-2:5)))
+
+#Set seed and run model
+svmPolyFit <- train(Phenotype ~ ., data = expressionRFE, method = "svmPoly", metric = metric, trControl = svmControl, verbose = FALSE, preProc = c("center", "scale"), tuneGrid = svmGrid )
+
+
+svmPolyFit
+
+trellis.par.set(caretTheme())
+plot(svmPolyFit, metric = metric, plotType = "level",
+     scales = list(x = list(rot = 90)))
+trellis.par.set(caretTheme())
+plot(svmPolyFit, metric = "Kappa", plotType = "level",
+     scales = list(x = list(rot = 90)))
 
 
 ```

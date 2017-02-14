@@ -23,6 +23,33 @@ library(reshape)
 
 ```
 
+#Functions
+```{r define functions, tidy=TRUE}
+
+#all machine learning models
+ml_fun<- function(dataset) {
+  # SVM Poly
+  set.seed(seed)
+  fit.svmPoly <- train(Phenotype~., data=dataset, method="svmPoly", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
+  # SVM Linear
+  set.seed(seed)
+  fit.svmLinear <- train(Phenotype~., data=dataset, method="svmLinear2", metric=metric, preProc=c("center", "scale"), trControl=control, fit=FALSE)
+  # Random Forest
+  set.seed(seed)
+  fit.rf <- train(Phenotype~., data=dataset, method="rf", metric=metric, trControl=control)
+  # Stochastic Gradient Boosting (Generalized Boosted Modeling)
+  set.seed(seed)
+  fit.gbm <- train(Phenotype~., data=dataset, method="gbm", metric=metric, trControl=control, verbose=FALSE)
+  ##Make List of models
+  modellist<-list(svmPoly=fit.svmPoly, rf=fit.rf, gbm=fit.gbm)
+  modellist
+}
+
+
+
+
+```
+
 
 
 #Directories
@@ -52,7 +79,11 @@ seed = 7
 set.seed(seed)
 
 #Control for algorithms
-control <- trainControl(method="repeatedcv", number=10, repeats=10, sampling="down", savePredictions="all") ## Steve added sampling argument. READ!!
+#control <- trainControl(method="repeatedcv", number=10, repeats=10, sampling="down", savePredictions="all", search="grid") 
+rfcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
+rftunegrid <- expand.grid(.mtry=c(1:15), .ntree=c(1000, 1500, 2000, 2500))
+set.seed(seed)
+
 
 #Define Metric to choose best model
 metric <- "Accuracy"
@@ -68,4 +99,27 @@ expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
 
 ```
 
+#Random Forrest Tuning
+```{r Random Forrest Tuning}
 
+#Define Custom function, taken from MachineLearning Mastery. Looks at mtry and ntree at same time. 
+customRF <- list(type = "Classification", library = "randomForest", loop = NULL)
+customRF$parameters <- data.frame(parameter = c("mtry", "ntree"), class = rep("numeric", 2), label = c("mtry", "ntree"))
+customRF$grid <- function(x, y, len = NULL, search = "grid") {}
+customRF$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
+    randomForest(x, y, mtry = param$mtry, ntree=param$ntree, ...)
+}
+customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+    predict(modelFit, newdata)
+customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+    predict(modelFit, newdata, type = "prob")
+customRF$sort <- function(x) x[order(x[,1]),]
+customRF$levels <- function(x) x$classes
+customRF
+
+RF_custom_search <- train(Phenotype~., data=expressionRFE, method=customRF, metric=metric, tuneGrid=rftunegrid, trControl=rfcontrol)
+summary(RF_custom_search)
+plot(RF_custom_search)
+
+#13.07
+```

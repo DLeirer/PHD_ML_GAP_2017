@@ -1,0 +1,71 @@
+---
+title: "Feature Selection"
+author: "DJL"
+date: "02/10/2016"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(plyr)
+library(dplyr)
+library(randomForest)
+library(lubridate)
+library(doMC)
+library(caret)
+library(reshape)
+
+
+```
+
+
+
+#Directories
+```{r Define directories}
+data_dir <-"./P0_Characterise/output/"
+P1_output_dir <-"./P1_Hypothesis_Free/output/"
+P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
+
+```
+
+#Load Data
+```{r Load data}
+
+load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
+load(file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
+
+
+```
+
+#Configure
+```{r Define Cores and Seed}
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=10, repeats=10, sampling="down", savePredictions="all") ## Steve added sampling argument. READ!!
+
+#Define Metric to choose best model
+metric <- "Accuracy"
+
+#Names of all predictors to be used. 
+opt_rfepredictors<-predictors(rfe_output)
+
+
+#input data frame
+expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
+
+
+
+```
+
+

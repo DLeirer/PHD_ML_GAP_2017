@@ -80,8 +80,20 @@ set.seed(seed)
 
 ###### Control for algorithms #########
 # Random Forrest
-rfcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
+rfcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid", sampling="down", savePredictions="all")
 rftunegrid <- expand.grid(.mtry=(1:20)*2)
+
+rfcontrol_random <- trainControl(method="repeatedcv", number=10, repeats=3,search="random", sampling="down", savePredictions="all")
+rftunegrid <- sqrt(ncol(x))
+
+# Random Search
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="random")
+set.seed(seed)
+mtry <- sqrt(ncol(x))
+rf_random <- train(Class~., data=dataset, method="rf", metric=metric, tuneLength=15, trControl=control)
+print(rf_random)
+plot(rf_random)
+
 # GBM
 GBMcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
 
@@ -151,8 +163,57 @@ plot(gbmFit, metric = "Kappa", plotType = "level",
 ```
 
 
-#Save all models for reference
-```{r save}
+#Compare models
+```{r Compare}
+resamps <- resamples(list(GBM = gbmFit,
+                          RF = RF_search))
+resamps
+summary(resamps)
+trellis.par.set(theme1)
+bwplot(resamps, layout = c(2, 1))
 
+trellis.par.set(caretTheme())
+dotplot(resamps, metric = "Accuracy")
+trellis.par.set(theme1)
+xyplot(resamps, what = "BlandAltman")
+splom(resamps)
+
+difValues <- diff(resamps)
+difValues
+summary(difValues)
+
+trellis.par.set(caretTheme())
+bwplot(difValues, layout = c(2, 1))
+
+trellis.par.set(caretTheme())
+dotplot(difValues)
 
 ```
+
+#Save all models for reference
+```{r save}
+resamps <- resamples(list(GBM = gbmFit,
+                          RF = RF_search))
+resamps
+summary(resamps)
+trellis.par.set(theme1)
+bwplot(resamps, layout = c(2, 1))
+
+trellis.par.set(caretTheme())
+dotplot(resamps, metric = "Accuracy")
+trellis.par.set(theme1)
+xyplot(resamps, what = "BlandAltman")
+splom(resamps)
+
+difValues <- diff(resamps)
+difValues
+summary(difValues)
+
+trellis.par.set(caretTheme())
+bwplot(difValues, layout = c(2, 1))
+
+trellis.par.set(caretTheme())
+dotplot(difValues)
+
+```
+

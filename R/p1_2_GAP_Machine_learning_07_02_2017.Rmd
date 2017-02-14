@@ -110,6 +110,7 @@ control <- trainControl(method="repeatedcv", number=10, repeats=10, sampling="do
 #Define Metric to choose best model
 metric <- "Accuracy"
 
+#Names of all predictors to be used. 
 opt_rfepredictors<-predictors(rfe_output)
 
 

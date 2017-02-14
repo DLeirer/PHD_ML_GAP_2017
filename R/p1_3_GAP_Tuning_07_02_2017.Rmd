@@ -81,8 +81,7 @@ set.seed(seed)
 ###### Control for algorithms #########
 # Random Forrest
 rfcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
-rftunegrid <- expand.grid(.mtry=c(1:15), .ntree=c(1000, 1500, 2000, 2500))
-rftunegrid <- expand.grid(.mtry=c(1:30))
+rftunegrid <- expand.grid(.mtry=(1:20)*2)
 # GBM
 GBMcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
 
@@ -104,59 +103,42 @@ expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
 #Random Forrest Tuning
 ```{r Random Forrest Tuning}
 
-#Define Custom function, taken from MachineLearning Mastery. Looks at mtry and ntree at same time. 
-customRF <- list(type = "Classification", library = "randomForest", loop = NULL)
-customRF$parameters <- data.frame(parameter = c("mtry", "ntree"), class = rep("numeric", 2), label = c("mtry", "ntree"))
-customRF$grid <- function(x, y, len = NULL, search = "grid") {}
-customRF$fit <- function(x, y, wts, param, lev, last, weights, classProbs, ...) {
-    randomForest(x, y, mtry = param$mtry, ntree=param$ntree, ...)
-}
-customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
-    predict(modelFit, newdata)
-customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
-    predict(modelFit, newdata, type = "prob")
-customRF$sort <- function(x) x[order(x[,1]),]
-customRF$levels <- function(x) x$classes
-customRF
+
 
 #Run Parameter Search.
 set.seed(seed)
-RF_custom_search <- train(Phenotype~., data=expressionRFE, method=customRF, metric=metric, tuneGrid=rftunegrid, trControl=rfcontrol) 
-RF_custom_search_test <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, tuneGrid=rftunegrid, trControl=rfcontrol) 
+RF_search <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, tuneGrid=rftunegrid, trControl=rfcontrol) 
 #takes around 15 minutes with 8 cores and 60 runs at 30 x cross validation. 
 
 #Summary and Plot. 
-RF_custom_search_test
-str(RF_custom_search_test)
-plot(RF_custom_search_test)
-trellis.par.set(caretTheme())
-plot(RF_custom_search_test)  
+RF_search
+
+ggplot(RF_search)  
+ggplot(RF_search, metric = "Kappa")  
+
+
 ```
 
 #Stochastic Gradient Boosting, Parameter Search
 ```{r GBM Parameter Search}
 
 #tuning grid GBM
-gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), n.trees = (1:30)*50, shrinkage = 0.1, n.minobsinnode = 20)
+gbmGrid <-  expand.grid(interaction.depth = (1:10)*3, n.trees = (1:15)*100, shrinkage = 0.1, n.minobsinnode = 20)
 
 #Set seed and run model
 set.seed(seed)
-gbmFit1 <- train(Phenotype ~ ., data = expressionRFE, method = "gbm",trControl = GBMcontrol, verbose = FALSE,tuneGrid = gbmGrid)
-gbmFit1
+gbmFit <- train(Phenotype ~ ., data = expressionRFE, method = "gbm",trControl = GBMcontrol, verbose = FALSE,tuneGrid = gbmGrid)
+gbmFit
 
-trellis.par.set(caretTheme())
-plot(gbmFit1)  
-trellis.par.set(caretTheme())
-plot(gbmFit1, metric = "Kappa")
 
-whichTwoPct <- tolerance(gbmFit1$results, metric = metric, tol = 2, maximize = TRUE)  
-gbmFit1$results[whichTwoPct,1:6]
+ggplot(gbmFit)  
+ggplot(gbmFit, metric = "Kappa")  
 
-predict(gbmFit1, newdata = head(testing))
+
 
 
 trellis.par.set(caretTheme())
-plot(gbmFit1, metric = "Kappa", plotType = "level",
+plot(gbmFit, metric = "Kappa", plotType = "level",
      scales = list(x = list(rot = 90)))
 
 ```
@@ -168,3 +150,9 @@ plot(gbmFit1, metric = "Kappa", plotType = "level",
 
 ```
 
+
+#Save all models for reference
+```{r save}
+
+
+```

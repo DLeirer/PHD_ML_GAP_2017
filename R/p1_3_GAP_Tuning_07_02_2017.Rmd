@@ -23,6 +23,30 @@ library(reshape)
 
 ```
 
+#Libraries
+```{r load_libs, tidy=TRUE}
+heatmap_ml<- function(model="NA",x_ax="NA",x_title="NA", y_ax="NA",y_title="NA",color_metric="NA",h_title="NA",save_output="NA") {
+  model_data<-model$results
+  model_data[,x_ax]<-as.factor(model_data[,x_ax])
+  model_data[,y_ax]<-as.factor(model_data[,y_ax])
+  model_data_metric<-model_data[,color_metric]
+  print(str(model_data))
+  ggplot(data = model_data, aes_string(x=x_ax, y=y_ax, fill=color_metric))+
+    geom_tile(color = "white")+
+    scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
+      midpoint = mean(model_data_metric), limit = c(min(model_data_metric),max(model_data_metric)), space = "Lab", 
+      name="") +
+    theme_minimal()+ 
+    theme(axis.text.x = element_text(angle = 90, vjust = 1, 
+      size = 10, hjust = 1))+
+    coord_fixed()+
+    ggtitle(h_title) + xlab(x_title) + ylab(y_title)
+  ggsave(save_output)
+}
+
+
+```
+
 
 #Directories
 ```{r Define directories}
@@ -133,11 +157,11 @@ class(svmPolyFit2)
 ################## RF  ############################  
 
 ggplot(RF_search)+
-  ggtitle("Random Forrest 3x10-fold cross validated search for best predictor by Accuracy")
+  ggtitle("Random Forrest Grid Search (Accuracy)")
 ggsave(paste(P1_figs_dir,"p1_3_RF_accuracy_.png",sep=""))
 
 ggplot(RF_search, metric = "Kappa")+
-  ggtitle("Random Forrest 3x10-fold cross validated search for best predictor by Kappa")
+  ggtitle("Random Forrest Grid Search (Kappa)")
 ggsave(paste(P1_figs_dir,"p1_3_RF_Kappa_.png",sep=""))
 
 
@@ -145,25 +169,22 @@ ggsave(paste(P1_figs_dir,"p1_3_RF_Kappa_.png",sep=""))
 #Grid search broad search. 
 
 
-ggplot(gbmFit)+ggtitle("Stochastic Gradient Boosting Grid Search by Accuracy")
+ggplot(gbmFit)+ggtitle("Stochastic Gradient Boosting Grid Search Results (Accuracy)")
 ggsave(paste(P1_figs_dir,"p1_3_GBM_accuracy_.png",sep=""))
 
-ggplot(gbmFit, metric = "Kappa")+ggtitle("Stochastic Gradient Boosting Grid Search by Kappa")
+ggplot(gbmFit, metric = "Kappa")+ggtitle("Stochastic Gradient Boosting Grid Search Results (Kappa)")
 ggsave(paste(P1_figs_dir,"p1_3_GBM_Kappa_.png",sep=""))
 
 
+c_metric = "Accuracy"
+svmTitle=paste("Stochastic Gradient Boosting Grid Search Results ","(",c_metric,")",sep="")
+svmSave=paste(P1_figs_dir,"p1_3_GBM_",c_metric,"_heatmap.jpg",sep="")
+heatmap_ml(model=gbmFit,x_ax="n.trees",x_title="Boosting Iterations", y_ax="interaction.depth", y_title="Max Tree Depth",color_metric=c_metric,h_title=svmTitle,save_output=svmSave )
 
-jpeg(paste(P1_figs_dir,"p1_3_GBM_Accuracy_heatmap.jpg"))
-trellis.par.set(caretTheme())
-plot(gbmFit, metric = metric, plotType = "level",
-     scales = list(x = list(rot = 90)),main="Stochastic Gradient Boosting Grid Search Results (Accuracy)")
-dev.off()
-
-jpeg(paste(P1_figs_dir,"p1_3_GBM_Kappa_heatmap.jpg"))
-trellis.par.set(caretTheme())
-plot(gbmFit, metric = "Kappa", plotType = "level",
-     scales = list(x = list(rot = 90)),main="Stochastic Gradient Boosting Grid Search Results (Kappa)")
-dev.off()
+c_metric = "Kappa"
+svmTitle=paste("Stochastic Gradient Boosting Grid Search Results ","(",c_metric,")",sep="")
+svmSave=paste(P1_figs_dir,"p1_3_GBM_",c_metric,"_heatmap.jpg",sep="")
+heatmap_ml(model=gbmFit,x_ax="n.trees",x_title="Boosting Iterations", y_ax="interaction.depth", y_title="Max Tree Depth",color_metric=c_metric,h_title=svmTitle,save_output=svmSave )
 
 
 
@@ -171,31 +192,28 @@ dev.off()
 #Grid search broad search. 
 
 
-jpeg(paste(P1_figs_dir,"p1_3_svmPoly_Accuracy_screen_heatmap.jpg"))
-trellis.par.set(caretTheme())
-plot(svmPolyFit, metric = metric, plotType = "level",
-     scales = list(x = list(rot = 90)),main="SVM Polynomial intial Grid Search Results (Accuracy)")
-dev.off()
 
-jpeg(paste(P1_figs_dir,"p1_3_svmPoly_Kappa_screen_heatmap.jpg"))
-trellis.par.set(caretTheme())
-plot(svmPolyFit, metric = "Kappa", plotType = "level",
-     scales = list(x = list(rot = 90)),main="SVM Polynomial initial Grid Search Results (Kappa)")
-dev.off()
+c_metric = "Accuracy"
+svmTitle=paste("SVM Polynomial intial Grid Search Results ","(",c_metric,")",sep="")
+svmSave=paste(P1_figs_dir,"p1_3_svmPoly_",c_metric,"_screen_heatmap.jpg",sep="")
+heatmap_ml(model=svmPolyFit,x_ax="scale",x_title="Scale", y_ax="C", y_title="Cost",color_metric=c_metric,h_title=svmTitle,save_output=svmSave )
+
+c_metric = "Kappa"
+svmTitle=paste("SVM Polynomial intial Grid Search Results ","(",c_metric,")",sep="")
+svmSave=paste(P1_figs_dir,"p1_3_svmPoly_",c_metric,"_screen_heatmap.jpg",sep="")
+heatmap_ml(model=svmPolyFit,x_ax="scale",x_title="Scale", y_ax="C", y_title="Cost",color_metric=c_metric,h_title=svmTitle,save_output=svmSave )
 
 #Grid search closer look. 
 
-jpeg(paste(P1_figs_dir,"p1_3_svmPoly_Accuracy_final_heatmap.jpg"))
-trellis.par.set(caretTheme())
-plot(svmPolyFit2, metric = metric, plotType = "level",
-     scales = list(x = list(rot = 90)),main="SVM Polynomial Final Grid Search Results (Accuracy)")
-dev.off()
+c_metric = "Accuracy"
+svmTitle=paste("SVM Polynomial Final Grid Search Results ","(",c_metric,")",sep="")
+svmSave=paste(P1_figs_dir,"p1_3_svmPoly_",c_metric,"_final_heatmap.jpg",sep="")
+heatmap_ml(model=svmPolyFit2,x_ax="scale",x_title="Scale", y_ax="C", y_title="Cost",color_metric=c_metric,h_title=svmTitle,save_output=svmSave )
 
-jpeg(paste(P1_figs_dir,"p1_3_svmPoly_Kappa_final_heatmap.jpg"))
-trellis.par.set(caretTheme())
-plot(svmPolyFit2, metric = "Kappa", plotType = "level",
-     scales = list(x = list(rot = 90)),main="SVM Polynomial Final Grid Search Results (Kappa)")
-dev.off()
+c_metric = "Kappa"
+svmTitle=paste("SVM Polynomial Final Grid Search Results ","(",c_metric,")",sep="")
+svmSave=paste(P1_figs_dir,"p1_3_svmPoly_",c_metric,"_final_heatmap.jpg",sep="")
+heatmap_ml(model=svmPolyFit2,x_ax="scale",x_title="Scale", y_ax="C", y_title="Cost",color_metric=c_metric,h_title=svmTitle,save_output=svmSave )
 
 ```
 

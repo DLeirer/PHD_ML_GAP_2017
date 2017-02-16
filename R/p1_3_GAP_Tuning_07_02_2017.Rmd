@@ -218,6 +218,40 @@ heatmap_ml(model=svmPolyFit2,x_ax="scale",x_title="Scale", y_ax="C", y_title="Co
 #Create best performing models
 ```{r Compare}
 
+gbmFit
+RF_search
+svmPolyFit2
+
+#Find least complex model within 1 percent of top performance
+whichTwoPct <- tolerance(RF_search$results, metric = metric, 
+                         tol = 1, maximize = TRUE)  
+RF_search$results[whichTwoPct,1:3]
+
+whichTwoPct <- tolerance(gbmFit$results, metric = metric, 
+                         tol = 1, maximize = TRUE)  
+gbmFit$results[whichTwoPct,1:6]
+
+whichTwoPct <- tolerance(svmPolyFit2$results, metric = metric, 
+                         tol = 1, maximize = TRUE)  
+svmPolyFit2$results[whichTwoPct,1:6]
+
+
+
+
+#Random Forrest
+rfcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid", sampling="down", savePredictions="all")
+rftunegrid <- expand.grid(.mtry=(2))
+
+
+#Run Parameter Search.
+set.seed(seed)
+RF_search_final <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, tuneGrid=rftunegrid, trControl=rfcontrol) 
+
+#Summary and Plot. 
+RF_search_final$results
+ml_resample<-resamples(RF_search_final)
+
+
 
 ```
 
@@ -227,6 +261,27 @@ resamps <- resamples(list(GBM = gbmFit,
                           RF = RF_search,
                           svmPoly = svmPolyFit2))
 resamps
+
+
+#plot comparing models
+Accuracy_results<-resamps$values[,grep("*Accuracy",colnames(resamps$values))]
+accuracy_plot<-Accuracy_results[,row.names(as.matrix(sort(sapply(Accuracy_results,mean),decreasing = F)))]
+accuracy_plot$Datasets<-c("RFE(GAP)")
+accuracy_plot2<-melt(accuracy_plot, id="Datasets")
+colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
+
+accuracy_plot2
+
+table(accuracy_plot2[,3])
+
+ggplot(accuracy_plot2,
+       aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
+  geom_point() + 
+  geom_boxplot()+
+  coord_flip()+
+  ggtitle("Accuracy of 10x10-fold cross validation for 11 Models")
+
+
 summary(resamps)
 trellis.par.set(theme1)
 bwplot(resamps, layout = c(2, 1))

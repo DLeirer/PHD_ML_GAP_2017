@@ -10,6 +10,75 @@ output: html_document
 ```{r}
 library(ComplexHeatmap)
 
+names(training_df)[1:30]
+
+
+## Pans Training Data
+Panns_positive<-GAP_fullscore[complete.cases(GAP_fullscore[,4]),]
+tpredictions<-training_predictions
+
+Training_ids_with_pannss<-row.names(trainingDataRFE)[row.names(trainingDataRFE)%in%Panns_positive[,"CHIP_ID"]]
+tpredictions$Phenotype<-as.vector(trainingDataRFE$Phenotype)
+tpredictions$CHIP_IDs<-row.names(trainingDataRFE)
+tpredictions<-tpredictions[tpredictions$CHIP_IDs%in%Training_ids_with_pannss,]
+
+
+model_train_pred_pannss<-merge(tpredictions,GAP_fullscore,by.x="CHIP_IDs",by.y="CHIP_ID")
+
+training_panns_scores<-model_train_pred_pannss[order(model_train_pred_pannss$PannsPositive,decreasing = T),]
+
+training_panns_scores$misclassed<-NA
+for (rowp in 1:length(training_panns_scores[,1])){  
+        training_panns_scores[rowp,"misclassed"]<-table(t(training_panns_scores[rowp,2:14]))[1]
+}
+training_panns_scores$correct_class_percentage<-training_panns_scores$misclassed*100/13
+
+training_panns_results<-training_panns_scores[,18:23]
+
+plot(training_panns_scores$glmnet,training_panns_scores$PannsPsycho)
+t.test
+
+library(reshape)
+panns_ploting<-training_panns_scores[,c("glmnet","PannsScore","PannsPositive","PannsNegative","PannsPsycho")]
+panns_ploting<-melt(panns_ploting,id="glmnet")
+colnames(panns_ploting)<-c("glmnet","Subscale","PANSS_Scores")
+
+length(training_panns_scores[,1])
+
+jpeg(file="GLMNET_Case_Control_PANNS_Scores.jpeg")
+ggplot(panns_ploting,
+  aes( glmnet,PANSS_Scores,colour = glmnet)) +
+  #geom_point() + 
+  geom_boxplot() +
+  facet_wrap(~Subscale) 
+dev.off()
+
+
+pvalues1<-NULL
+for (rowp in 18:21){  
+    pvalues1[rowp-17]<-t.test(training_panns_scores[,rowp]~training_panns_scores$glmnet)$p.value
+     
+}
+
+pvalues1
+
+p.adjust(pvalues1,"bonferroni")
+
+training_panns_results[order(training_panns_results$correct_class_percentage,decreasing = T),]
+
+mean(training_panns_results[,1])
+mean(training_panns_results[,2])
+mean(training_panns_results[,3])
+
+```
+
+
+############################################################## GRAVEYARD MATERIAL
+
+## Check test and training performance.
+```{r}
+
+
 setwd(resultdir)
 load("lee_400_Variable_importance.Rdata")
 load("Feature_selection_and_varimp_RFE_LQV_Classification_models.rdata")
@@ -203,64 +272,3 @@ dim(testing_panns_scores)
 plot(testing_panns_scores$PannsScore,testing_panns_scores$misclassed)
 
 View(testing_panns_scores)[,c(2:14,21)]
-
-
-## Pans Training Data
-Panns_positive<-GAP_fullscore[complete.cases(GAP_fullscore[,4]),]
-tpredictions<-training_predictions
-
-Training_ids_with_pannss<-row.names(trainingDataRFE)[row.names(trainingDataRFE)%in%Panns_positive[,"CHIP_ID"]]
-tpredictions$Phenotype<-as.vector(trainingDataRFE$Phenotype)
-tpredictions$CHIP_IDs<-row.names(trainingDataRFE)
-tpredictions<-tpredictions[tpredictions$CHIP_IDs%in%Training_ids_with_pannss,]
-
-
-model_train_pred_pannss<-merge(tpredictions,GAP_fullscore,by.x="CHIP_IDs",by.y="CHIP_ID")
-
-training_panns_scores<-model_train_pred_pannss[order(model_train_pred_pannss$PannsPositive,decreasing = T),]
-
-training_panns_scores$misclassed<-NA
-for (rowp in 1:length(training_panns_scores[,1])){  
-        training_panns_scores[rowp,"misclassed"]<-table(t(training_panns_scores[rowp,2:14]))[1]
-}
-training_panns_scores$correct_class_percentage<-training_panns_scores$misclassed*100/13
-
-training_panns_results<-training_panns_scores[,18:23]
-
-plot(training_panns_scores$glmnet,training_panns_scores$PannsPsycho)
-t.test
-
-library(reshape)
-panns_ploting<-training_panns_scores[,c("glmnet","PannsScore","PannsPositive","PannsNegative","PannsPsycho")]
-panns_ploting<-melt(panns_ploting,id="glmnet")
-colnames(panns_ploting)<-c("glmnet","Subscale","PANSS_Scores")
-
-length(training_panns_scores[,1])
-
-jpeg(file="GLMNET_Case_Control_PANNS_Scores.jpeg")
-ggplot(panns_ploting,
-  aes( glmnet,PANSS_Scores,colour = glmnet)) +
-  #geom_point() + 
-  geom_boxplot() +
-  facet_wrap(~Subscale) 
-dev.off()
-
-
-pvalues1<-NULL
-for (rowp in 18:21){  
-    pvalues1[rowp-17]<-t.test(training_panns_scores[,rowp]~training_panns_scores$glmnet)$p.value
-     
-}
-
-pvalues1
-
-p.adjust(pvalues1,"bonferroni")
-
-training_panns_results[order(training_panns_results$correct_class_percentage,decreasing = T),]
-
-mean(training_panns_results[,1])
-mean(training_panns_results[,2])
-mean(training_panns_results[,3])
-
-```
-

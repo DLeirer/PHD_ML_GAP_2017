@@ -324,11 +324,22 @@ save(High_Low_complexity_model_list, file=paste(P1_output_dir,"P1_3_High_Low_com
 #Validation
 ```{r Validation}
 
+#Predictions
+predict_fit<-predict(gbmFit, newdata = testing_df)
+confusionMatrix(predict_fit, testing_df$Phenotype)
 
 predict_fit<-predict(gbm_final, newdata = testing_df)
 confusionMatrix(predict_fit, testing_df$Phenotype)
 
+
+predict_fit<-predict(RF_search, newdata = testing_df)
+confusionMatrix(predict_fit, testing_df$Phenotype)
+
 predict_fit<-predict(RF_final, newdata = testing_df)
+confusionMatrix(predict_fit, testing_df$Phenotype)
+
+
+predict_fit<-predict(svmPolyFit2, newdata = testing_df)
 confusionMatrix(predict_fit, testing_df$Phenotype)
 
 predict_fit<-predict(svmPoly_final, newdata = testing_df)

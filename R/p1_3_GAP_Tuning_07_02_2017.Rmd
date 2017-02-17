@@ -21,21 +21,19 @@ library(caret)
 library(reshape)
 library(plotly)
 
-install.packages("ggplot2")
 
-install.packages("plotly")
-
-backup_envir()
 ```
 
 #Libraries
 ```{r load_libs, tidy=TRUE}
+#enviroment backup save function
 backup_envir<- function(location=enviroment_backup,f_name="envir_backup") {
   save.image(file=paste(location,f_name,".RData",sep=""))
 }
 
-ggsave(paste(P1_figs_dir,"p1_3_RF_Kappa_.png",sep=""))
 
+
+#heatmap plotting function
 heatmap_ml<- function(model="NA",x_ax="NA",x_title="NA", y_ax="NA",y_title="NA",color_metric="NA",h_title="NA",save_output="NA") {
   model_data<-model$results
   model_data[,x_ax]<-as.factor(model_data[,x_ax])
@@ -53,6 +51,12 @@ heatmap_ml<- function(model="NA",x_ax="NA",x_title="NA", y_ax="NA",y_title="NA",
     coord_fixed()+
     ggtitle(h_title) + xlab(x_title) + ylab(y_title)
   ggsave(save_output)
+}
+
+
+#find simple model. 
+simple_model_fun<- function(ml_model,tol_percentage = 1, metric_sm=metric) {
+    tolerance(ml_model$results, metric = metric_sm, tol = tol_percentage, maximize = TRUE)    
 }
 
 
@@ -74,7 +78,7 @@ load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
 load(file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
 #load backup enviroment
-#load(file=paste(P1_output_dir,"envir_backup.RData",sep=""))
+#load(file=paste(enviroment_backup,"envir_backup.RData",sep=""))
 
 ```
 
@@ -125,7 +129,7 @@ GBMcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="
 
 
 #tuning grid GBM
-gbmGrid <-  expand.grid(interaction.depth = ((1:8)*2)-1, n.trees = (1:20)*100, shrinkage = 0.1, n.minobsinnode = 20)
+gbmGrid <-  expand.grid(shrinkage = 0.1,interaction.depth = ((1:8)*2)-1, n.trees = (1:20)*100, n.minobsinnode = 20)
 
 #Set seed and run model
 set.seed(seed)
@@ -156,7 +160,7 @@ svmGrid <-  expand.grid(degree = 3, scale = c((1:10)/1000),C = c(2^(-5:1),3,4))
 #Set seed and run model
 set.seed(seed)
 svmPolyFit2 <- train(Phenotype ~ ., data = expressionRFE, method = "svmPoly", metric = metric, trControl = svmControl, verbose = FALSE, preProc = c("center", "scale"), tuneGrid = svmGrid )
-class(svmPolyFit2)
+svmPolyFit2
 
 
 
@@ -228,46 +232,59 @@ heatmap_ml(model=svmPolyFit2,x_ax="scale",x_title="Scale", y_ax="C", y_title="Co
 
 ```
 
-#Create best performing models
-```{r Compare}
+#Find low complexity model Here we look for a balance between complexity and accuracy. 
+Default value I am using is 1% from top performance. 
+Reduced complexity, is itself a complex ambigious thing, and not fully objective, especially when it comes to svmPoly. But for tree based methods I think there is at least general agreement.
 
-gbmFit
-RF_search
-svmPolyFit2
+```{r complexity vs accuracy}
 
-## define acceptal decrease in accuracy
-tol_percentage = 0.002
-#Find least complex model within 1 percent of top performance
-whichTwoPct <- tolerance(RF_search$results, metric = metric, 
-                         tol = tol_percentage, maximize = TRUE)  
-RF_search$results[whichTwoPct,1:3]
 
-whichTwoPct <- tolerance(gbmFit$results, metric = metric, 
-                         tol = tol_percentage, maximize = TRUE)  
-gbmFit$results[whichTwoPct,1:6]
+#####   Find least complex model within 1 percent of top performance
+simpleRF<-as.numeric(RF_search$results[simple_model_fun(ml_model=RF_search),][1,])
+simpleGBM<-as.numeric(gbmFit$results[simple_model_fun(ml_model=gbmFit),][1,])
+simplePoly<-as.numeric(svmPolyFit2$results[simple_model_fun(ml_model=svmPolyFit2),][1,])
 
-whichTwoPct <- tolerance(svmPolyFit2$results, metric = metric, 
-                         tol = tol_percentage, maximize = TRUE)  
-svmPolyFit2$results[whichTwoPct,1:6]
+
+#####   Define Grid searches. Etc. 
+fcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
+
+rftGrid <- expand.grid(.mtry=simpleRF[1])
+gbmGrid <- expand.grid(shrinkage = simpleGBM[1],interaction.depth = simpleGBM[2],n.minobsinnode = simpleGBM[3], n.trees = simpleGBM[4])
+svmGrid2 <-  expand.grid(degree = simplePoly[1], scale = simplePoly[2],C = simplePoly[3])
 
 
 
-
-#Random Forrest
-rfcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid", sampling="down", savePredictions="all")
-rftunegrid <- expand.grid(.mtry=(2))
-
-
-#Run Parameter Search.
+train(Phenotype ~ ., data = expressionRFE, method = "gbm", metric = metric, trControl = GBMcontrol, verbose = FALSE,tuneGrid = gbmGrid)
+#####   Run models
 set.seed(seed)
-RF_search_final <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, tuneGrid=rftunegrid, trControl=rfcontrol) 
+RF_final <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl= fcontrol, verbose = FALSE, tuneGrid=rftGrid) 
+set.seed(seed)
+gbm_final <- train(Phenotype ~ ., data = expressionRFE, method = "gbm", metric = metric, trControl = fcontrol, verbose = FALSE, tuneGrid = gbmGrid)
+set.seed(seed)
+svmPoly_final <- train(Phenotype ~ ., data = expressionRFE, method = "svmPoly", metric = metric, trControl = fcontrol, verbose = FALSE, preProc = c("center", "scale"), tuneGrid = svmGrid)
+
+
+```
+
+
+#Resample of top performers and top low complexity performers. 
+```{r complexity vs accuracy}
+
 
 #Summary and Plot. 
-class(RF_search_final)
-ml_resample<-resamples(list(GBM = gbmFit,
-                          RF_fin=RF_search_final,
-                          RF = RF_search,
-                          svmPoly = svmPolyFit2))
+ml_resample<-resamples(list(RF = RF_search,
+                          RF_simple=RF_final,
+                          GBM = gbmFit,
+                          GBM_simple = gbm_final,
+                          svmPoly = svmPolyFit2,
+                          svmPoly_simple = svmPoly_final))
+
+ml_resample<-resamples(list(RF = RF_search,
+                          RF_simple=RF_final,
+                          GBM = gbmFit,
+                          GBM_simple = gbm_final,
+                          svmPoly = svmPolyFit2,
+                          svmPoly_simple = svmPoly_final))
 
 resamps=ml_resample
 
@@ -297,7 +314,6 @@ ggplot(accuracy_plot2,
   geom_point() + 
   geom_boxplot()+
   geom_jitter()+
-  stat_summary_hex(aes(z = z), bins = 30, fun = mean)+ 
   coord_flip()+
   ggtitle("Accuracy of 10x10-fold cross validation for 11 Models")
 

@@ -38,7 +38,8 @@ proj/
 │├── figs/  
 │└── output/  
 ├── R/  
-├── data/  
+├── data/
+├── enviroment_backup/  
 └── doc/  
 
 ---
@@ -52,6 +53,7 @@ figs = contains figures for subproject
 output = contains output files from subproject.  
 R = Contains Scripts  
 data = contains all data (with exception of large data frames. Uploaded on Google Drive.)  
+enviroment_backup = folder for backing up enviroment to avoid dataloss.
 doc = contains paper, labbook and other documentation.  
 
 # Subproject 0: Characterise

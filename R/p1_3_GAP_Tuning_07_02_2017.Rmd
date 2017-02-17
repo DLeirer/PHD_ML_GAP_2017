@@ -19,12 +19,23 @@ library(lubridate)
 library(doMC)
 library(caret)
 library(reshape)
+library(plotly)
 
+install.packages("ggplot2")
 
+install.packages("plotly")
+
+backup_envir()
 ```
 
 #Libraries
 ```{r load_libs, tidy=TRUE}
+backup_envir<- function(location=enviroment_backup,f_name="envir_backup") {
+  save.image(file=paste(location,f_name,".RData",sep=""))
+}
+
+ggsave(paste(P1_figs_dir,"p1_3_RF_Kappa_.png",sep=""))
+
 heatmap_ml<- function(model="NA",x_ax="NA",x_title="NA", y_ax="NA",y_title="NA",color_metric="NA",h_title="NA",save_output="NA") {
   model_data<-model$results
   model_data[,x_ax]<-as.factor(model_data[,x_ax])
@@ -53,7 +64,7 @@ heatmap_ml<- function(model="NA",x_ax="NA",x_title="NA", y_ax="NA",y_title="NA",
 data_dir <-"./P0_Characterise/output/"
 P1_output_dir <-"./P1_Hypothesis_Free/output/"
 P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
-
+enviroment_backup <- "./enviroment_backup/"
 ```
 
 #Load Data
@@ -62,6 +73,8 @@ P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
 load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
 load(file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
+#load backup enviroment
+#load(file=paste(P1_output_dir,"envir_backup.RData",sep=""))
 
 ```
 
@@ -222,17 +235,19 @@ gbmFit
 RF_search
 svmPolyFit2
 
+## define acceptal decrease in accuracy
+tol_percentage = 0.002
 #Find least complex model within 1 percent of top performance
 whichTwoPct <- tolerance(RF_search$results, metric = metric, 
-                         tol = 1, maximize = TRUE)  
+                         tol = tol_percentage, maximize = TRUE)  
 RF_search$results[whichTwoPct,1:3]
 
 whichTwoPct <- tolerance(gbmFit$results, metric = metric, 
-                         tol = 1, maximize = TRUE)  
+                         tol = tol_percentage, maximize = TRUE)  
 gbmFit$results[whichTwoPct,1:6]
 
 whichTwoPct <- tolerance(svmPolyFit2$results, metric = metric, 
-                         tol = 1, maximize = TRUE)  
+                         tol = tol_percentage, maximize = TRUE)  
 svmPolyFit2$results[whichTwoPct,1:6]
 
 
@@ -248,10 +263,13 @@ set.seed(seed)
 RF_search_final <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, tuneGrid=rftunegrid, trControl=rfcontrol) 
 
 #Summary and Plot. 
-RF_search_final$results
-ml_resample<-resamples(RF_search_final)
+class(RF_search_final)
+ml_resample<-resamples(list(GBM = gbmFit,
+                          RF_fin=RF_search_final,
+                          RF = RF_search,
+                          svmPoly = svmPolyFit2))
 
-
+resamps=ml_resample
 
 ```
 
@@ -260,7 +278,7 @@ ml_resample<-resamples(RF_search_final)
 resamps <- resamples(list(GBM = gbmFit,
                           RF = RF_search,
                           svmPoly = svmPolyFit2))
-resamps
+str(resamps)
 
 
 #plot comparing models
@@ -278,6 +296,8 @@ ggplot(accuracy_plot2,
        aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
   geom_point() + 
   geom_boxplot()+
+  geom_jitter()+
+  stat_summary_hex(aes(z = z), bins = 30, fun = mean)+ 
   coord_flip()+
   ggtitle("Accuracy of 10x10-fold cross validation for 11 Models")
 

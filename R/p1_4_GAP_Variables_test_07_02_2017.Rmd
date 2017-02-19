@@ -10,13 +10,57 @@ output: html_document
 ```{r}
 library(ComplexHeatmap)
 
+
+predict_fit<-predict(gbmFit, newdata = testing_df)
+confusionMatrix(predict_fit, testing_df$Phenotype)
+
 names(training_df)[1:30]
 
+all.equal(names(training_df),names(testing_df))
+full_data<-rbind(training_df,testing_df)
+
+predict_train_fit<-predict(gbmFit, newdata = full_data)
+confusionMatrix(predict_train_fit, full_data$Phenotype)
+predict_fit
+
+
+full_data$Phenotype
 
 ## Pans Training Data
-Panns_positive<-GAP_fullscore[complete.cases(GAP_fullscore[,4]),]
-tpredictions<-training_predictions
 
+predict_fit
+#Panns_positive<-GAP_fullscore[complete.cases(GAP_fullscore[,4]),]
+Panss_positive<-full_data[,1:26]
+Panss_positive<-Panns_positive[complete.cases(Panss_positive$PanssPositive),]
+Panss_positive<-Panss_positive[complete.cases(Panss_positive$PanssScore),]
+Panss_positive<-Panss_positive[complete.cases(Panss_positive$PanssNegative),]
+#tpredictions<-training_predictions
+
+#modified
+tpredictions<-data.frame(predict_train_fit)
+rownames(tpredictions)<-full_data$sampleID
+
+model_train_pred_panss<-merge(tpredictions,Panns_positive,by.x="row.names",by.y="sampleID")
+
+
+
+names(model_train_pred_panss)
+panss_ploting<-model_train_pred_pannss[,c("predict_train_fit","PanssScore","PanssPositive","PanssNegative","PanssPsycho" )]
+panss_ploting<-model_train_pred_pannss[,c("predict_train_fit","PanssPositive","PanssNegative","PanssPsycho" )]
+
+panss_ploting<-melt(panss_ploting,id="predict_train_fit")
+colnames(panss_ploting)<-c("ML_Model","Subscale","PANSS_Scores")
+
+
+ggplot(panss_ploting,
+  aes( ML_Model,PANSS_Scores,colour = ML_Model)) +
+  #geom_point() + 
+  geom_boxplot() +
+  geom_jitter()+
+  facet_wrap(~Subscale) 
+
+
+###################################################### OLD
 Training_ids_with_pannss<-row.names(trainingDataRFE)[row.names(trainingDataRFE)%in%Panns_positive[,"CHIP_ID"]]
 tpredictions$Phenotype<-as.vector(trainingDataRFE$Phenotype)
 tpredictions$CHIP_IDs<-row.names(trainingDataRFE)

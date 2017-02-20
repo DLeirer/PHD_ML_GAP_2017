@@ -4,47 +4,148 @@ author: "DJL"
 date: "06/06/2016"
 output: html_document
 ---
+#Todo
+```{r todo list, tidy=TRUE}
+1: impute missing data
+2: 
+```
+
+
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+library(tableone)
+library(dplyr)
+```
+
+
+##Set directories:
+```{r directory}
+
+```
+
+
+#Functions
+```{r define functions, tidy=TRUE}
+
+table_fun2<- function(mldata,main_var,file_name,prs_col=prs_col){
+  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(mldata)[prs_col])
+  catVars <- c("Ethnicity","Tobacco")
+  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c(main_var),includeNA = T)
+  table1print<-print(table1)
+  write.table(table1print, file=paste(P0_output_dir,file_name,"_Table_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+}
+
+  listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+  catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
+  table2 <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,includeNA = T)
+  table2print<-print(table2)
+  write.table(table2print, file=paste(P0_output_dir,file_name,"_Table_2_Clinicalinformation.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+}
+```
+
+
+
+## Create Table of variables
+```{r}
+
+
+names(model_test_pheno)
+model_test_pheno[,c("Phenotype","predict_train_fit","ConfusionMatrix")]
+model_test_pheno_Backup<-model_test_pheno
+model_test_pheno[19:27]<-scale(model_test_pheno[19:27], center = TRUE, scale = TRUE)
+names(model_test_pheno)
+case_data=model_test_pheno[model_test_pheno$Phenotype == "FEP",]
+control_data=model_test_pheno[!model_test_pheno$Phenotype == "FEP",]
+
+
+## Make confusion matrix column
+model_test_pheno<-model_test_pheno %>% mutate(ConfusionMatrix=ifelse(Phenotype == "FEP" & predict_train_fit=="control","FEP_misclassed",
+                                            ifelse(Phenotype == "FEP" & predict_train_fit=="FEP","FEP_true",
+                                            ifelse(Phenotype != "FEP" & predict_train_fit=="FEP","Control_misclassified","Control_true"))))
+
+
+
+listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(model_test_pheno)[19:27])
+catVars <- c("Ethnicity","Tobacco")
+table1_full <- CreateTableOne(vars = listVars, data = model_test_pheno, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
+table1print<-print(table1_full)
+write.table(table1print, file=paste(P1_output_dir,"p1_4_RF_model_Table_CM_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+
+case_data[case_data$predict_train_fit == "control",]
+
+length(case_data$predict_train_fit == "control")
+
+dim(case_data)
+names(control_data)
+table(control_data$predict_train_fit)
+table(case_data$predict_train_fit)
+
+listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(model_test_pheno)[19:27])
+catVars <- c("Ethnicity","Tobacco")
+table_fep1 <- CreateTableOne(vars = listVars, data = case_data, factorVars = catVars,strata=c("predict_train_fit"),includeNA = T)
+table_control2 <- CreateTableOne(vars = listVars, data = control_data, factorVars = catVars,strata=c("predict_train_fit"),includeNA = T)
+table1print<-print(table_fep1)
+table2print<-print(table_control2)
+write.table(table1print, file=paste(P0_output_dir,file_name,"_Table_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+
+listVars <- c(names(model_test_pheno)[19:27])
+table_fep1 <- CreateTableOne(vars = listVars, data = case_data, strata=c("predict_train_fit"),includeNA = T)
+table_control2 <- CreateTableOne(vars = listVars, data = control_data, strata=c("predict_train_fit"),includeNA = T)
+table1print<-print(table_fep1)
+table2print<-print(table_control2)
+
+
+str(table_fep1)
+
+listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
+table_fep2 <- CreateTableOne(vars = listVars2, data = case_data, factorVars = catVars2,strata=c("predict_train_fit"),includeNA = T)
+table2print<-print(table_fep2)
+
+
+
+```
+
 
 
 ## Check most important variables for GAP
 ```{r}
-library(ComplexHeatmap)
 
 
-predict_fit<-predict(gbmFit, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
+predict_train_fit<-predict.train(RF_final, newdata = testing_df)
+confusionMatrix(predict_train_fit, testing_df$Phenotype)
 
-names(training_df)[1:30]
+
+names(testing_df)[1:26]
 
 all.equal(names(training_df),names(testing_df))
-full_data<-rbind(training_df,testing_df)
+#full_data<-rbind(training_df,testing_df)
+full_data<-rbind(testing_df)
 
-predict_train_fit<-predict(gbmFit, newdata = full_data)
-confusionMatrix(predict_train_fit, full_data$Phenotype)
-predict_fit
-
-
-full_data$Phenotype
 
 ## Pans Training Data
 
 predict_fit
 #Panns_positive<-GAP_fullscore[complete.cases(GAP_fullscore[,4]),]
 Panss_positive<-full_data[,1:26]
-Panss_positive<-Panns_positive[complete.cases(Panss_positive$PanssPositive),]
-Panss_positive<-Panss_positive[complete.cases(Panss_positive$PanssScore),]
-Panss_positive<-Panss_positive[complete.cases(Panss_positive$PanssNegative),]
+#Panss_positive<-Panns_positive[complete.cases(Panss_positive$PanssPositive),]
+#Panss_positive<-Panss_positive[complete.cases(Panss_positive$PanssScore),]
+#Panss_positive<-Panss_positive[complete.cases(Panss_positive$PanssNegative),]
 #tpredictions<-training_predictions
 
+Panss_positive
+
 #modified
+#tpredictions<-data.frame(predict_train_fit)
 tpredictions<-data.frame(predict_train_fit)
-rownames(tpredictions)<-full_data$sampleID
+rownames(tpredictions)<-Panss_positive$sampleID
 
-model_train_pred_panss<-merge(tpredictions,Panns_positive,by.x="row.names",by.y="sampleID")
+model_test_pheno<-merge(tpredictions,Panss_positive,by.x="row.names",by.y="sampleID")
 
 
 
-names(model_train_pred_panss)
+names(model_test_pheno)
 panss_ploting<-model_train_pred_pannss[,c("predict_train_fit","PanssScore","PanssPositive","PanssNegative","PanssPsycho" )]
 panss_ploting<-model_train_pred_pannss[,c("predict_train_fit","PanssPositive","PanssNegative","PanssPsycho" )]
 
@@ -60,48 +161,10 @@ ggplot(panss_ploting,
   facet_wrap(~Subscale) 
 
 
-###################################################### OLD
-Training_ids_with_pannss<-row.names(trainingDataRFE)[row.names(trainingDataRFE)%in%Panns_positive[,"CHIP_ID"]]
-tpredictions$Phenotype<-as.vector(trainingDataRFE$Phenotype)
-tpredictions$CHIP_IDs<-row.names(trainingDataRFE)
-tpredictions<-tpredictions[tpredictions$CHIP_IDs%in%Training_ids_with_pannss,]
-
-
-model_train_pred_pannss<-merge(tpredictions,GAP_fullscore,by.x="CHIP_IDs",by.y="CHIP_ID")
-
-training_panns_scores<-model_train_pred_pannss[order(model_train_pred_pannss$PannsPositive,decreasing = T),]
-
-training_panns_scores$misclassed<-NA
-for (rowp in 1:length(training_panns_scores[,1])){  
-        training_panns_scores[rowp,"misclassed"]<-table(t(training_panns_scores[rowp,2:14]))[1]
-}
-training_panns_scores$correct_class_percentage<-training_panns_scores$misclassed*100/13
-
-training_panns_results<-training_panns_scores[,18:23]
-
-plot(training_panns_scores$glmnet,training_panns_scores$PannsPsycho)
-t.test
-
-library(reshape)
-panns_ploting<-training_panns_scores[,c("glmnet","PannsScore","PannsPositive","PannsNegative","PannsPsycho")]
-panns_ploting<-melt(panns_ploting,id="glmnet")
-colnames(panns_ploting)<-c("glmnet","Subscale","PANSS_Scores")
-
-length(training_panns_scores[,1])
-
-jpeg(file="GLMNET_Case_Control_PANNS_Scores.jpeg")
-ggplot(panns_ploting,
-  aes( glmnet,PANSS_Scores,colour = glmnet)) +
-  #geom_point() + 
-  geom_boxplot() +
-  facet_wrap(~Subscale) 
-dev.off()
-
-
+#Calculate P-values
 pvalues1<-NULL
-for (rowp in 18:21){  
-    pvalues1[rowp-17]<-t.test(training_panns_scores[,rowp]~training_panns_scores$glmnet)$p.value
-     
+for (rowp in 2:5){  
+    pvalues1[rowp-1]<-t.test(panss_ploting[,rowp]~panss_ploting$predict_train_fit)$p.value
 }
 
 pvalues1
@@ -117,202 +180,5 @@ mean(training_panns_results[,3])
 ```
 
 
-############################################################## GRAVEYARD MATERIAL
-
-## Check test and training performance.
-```{r}
 
 
-setwd(resultdir)
-load("lee_400_Variable_importance.Rdata")
-load("Feature_selection_and_varimp_RFE_LQV_Classification_models.rdata")
-
-glmnet<-Variableimp_results[[1]][[3]]
-glmnet<-glmnet[1:20,c(1,3)]
-
-barplot(t(as.matrix(glmnet)), main="Car Distribution", horiz=TRUE)
-RocImp2 <- varImp(modellist[[3]], scale = FALSE)
-
-
-
-length(models_imp)
-models_imp<-Variableimp_results[[1]]
-variableimp_data<-matrix(nrow=20, ncol=length(models_imp))
-colnames(variableimp_data)<-names(models_imp)
-for (modelvar in 1:length(models_imp)){
-      gene_list_X<-as.vector(models_imp[[modelvar]][1:20,1])
-      variableimp_data[,modelvar]<-gene_list_X
-      #variableimp_data<-rbind(variableimp_data,gene_list_X)
-      #colnames(mean_Accuracy)<-combined_list[[r]]$models
-}
-
-models_imp[[12]][1:20,]
-colnames(lee_11_dataset[,-1])[colnames(lee_11_dataset[,-1])%in%variableimp_data[,13]]
-row.names(sort(table(variableimp_data)))
-library(WGCNA)
-write.csv(as.vector(row.names(sort(table(variableimp_data)))),"RFE_GAP_top_Features.csv")
-
-View(as.vector(row.names(sort(table(variableimp_data)))))
-
-variableimp_data[,1]<-models_imp[[2]][1:20,1]
-rbind(as.vector(models_imp[[2]][1:20,1]),as.vector(models_imp[[1]][1:20,1]))
-
-str(gene_list_X)
-colnames(fdata_r)
-write.table(fdata_r[fdata_r$TargetID%in%variableimp_data[,3],c(2,17)],file="GLMNET_Feature_table.csv",sep="\t")
-
-table(fdata_r[,30])
-
-## heatmap of top probes
-
-columnindex<-colnames(expressionRFE)%in%variableimp_data[,3]
-columnindex[1]<-TRUE
-expressRFE<-expressionRFE[,columnindex]
-
-
-Case1<-expressRFE[expressRFE$Phenotype == "CASE",]
-Control1<-expressRFE[expressRFE$Phenotype == "CONTROL",]
-
-heatmap_final<-rbind(Case1,Control1)
-
-Heatmap(heatmap_final,name = "Expression Level", row_title="Genes")
-
-averagedata<-cbind(apply(Case1[,-1],2,mean),apply(Control1[,-1],2,mean))
-colnames(averagedata)<-c("Case","Control")
-
-jpeg(file="GLMNET_Case_Control_heatmap.jpeg")
-Heatmap(averagedata,name = "Expression Level", row_title="Genes")
-dev.off()
-
-getwd()
-
-Heatmap(Case1,name = "Expression Level", row_title="Genes")
-
-jpeg(file="Case_Control_heatmap.jpeg")
-Heatmap(small_matrix, name = "Expression Level", row_title="Genes")
-dev.off()
-
-```
-
-
-## Check test and training performance.
-```{r}
-load("all_RFE_Models.Rdata")
-RFE_models<-modellist
-colnames(testingRFE)<-c("Phenotype",paste("IndexID",2:length(trainingRFE)-1,sep=""))
-
-trainingDataRFE<-trainingRFE
-colnames(trainingDataRFE)<-c("Phenotype",paste("IndexID",2:length(trainingRFE)-1,sep=""))
-
-# Treaining predictions
-training_predictions<-NULL
-for (modelnumber in 1:length(RFE_models)){
-  temp_predict<-as.vector(predict(RFE_models[[modelnumber]],trainingDataRFE))
-  training_predictions<-cbind(training_predictions,temp_predict)
-}
-
-colnames(training_predictions)<-names(RFE_models)
-training_predictions<-as.data.frame(training_predictions)
-
-
-# Testing predictions
-model_predictions<-NULL
-for (modelnumber in 1:length(RFE_models)){
-  temp_predict<-as.vector(predict(RFE_models[[modelnumber]],testingRFE))
-  model_predictions<-cbind(model_predictions,temp_predict)
-}
-
-colnames(model_predictions)<-names(RFE_models)
-model_predictions<-as.data.frame(model_predictions)
-
-
-model_performance<-NULL
-for (modelnumber in 1:length(modellist)){
-    conmatrix<-confusionMatrix(as.numeric(testingRFE$Phenotype),as.numeric(model_predictions[,modelnumber]))
-    conmatrix_comb<-rbind(as.matrix(conmatrix$overall),as.matrix(conmatrix$byClass))
-    model_performance<-cbind(model_performance,conmatrix_comb)
-    colnames(model_performance)[modelnumber]<-modellist[[modelnumber]]$method
-}
-
-
-RFE_test_performance<-model_performance[,rownames(as.matrix(sort(model_performance[1,],decreasing=T)))]
-signif(t(RFE_test_performance[c("Accuracy","Kappa","Sensitivity","Specificity"),]),3)
-write.csv(signif(t(RFE_test_performance[c("Accuracy","Kappa","Sensitivity","Specificity"),]),3),file="RFE_testing_performance.csv")
-
-model_predictions<-as.data.frame(model_predictions)
-model_predictions$Phenotype<-testingRFE$Phenotype
-
-temp_predict<-predict(fit.lda,testingRFE)
-
-table(predict(RFE_models[[13]],testingRFE))
-
-
-
-# plot RFE training vs test
-colnames(mean_Accuracy)<-colnames(model_performance)
-test_train_rfe<-rbind(RFE_test_performance[1,],mean_Accuracy[,colnames(RFE_test_performance)])
-
-test_train_rfe<-test_train_rfe[,row.names(as.matrix(sort(sapply(test_train_rfe,mean),decreasing=F)))]
-rownames(test_train_rfe)<-c("Testing","Training")
-test_train_rfe$Datasets<-rownames(test_train_rfe)
-test_train_rfe2<-melt(test_train_rfe, id="Datasets")
-colnames(test_train_rfe2)<-c("GeneLists","Algorithm","Accuracy")
-
-ggplot(test_train_rfe2,
-  aes(x=Accuracy,y=Algorithm, colour = GeneLists)) +
-  geom_point() + 
-  ggtitle("Comparison Testing and Training accuracy")
-ggsave("Dotplot_comparing_Testing_training_genelists.png")
-
-
-
-#################### Sort out PANNSSS scores ##################################
-setwd(datadir)
-library(foreign)
-GAP_database<-read.spss("Master_database_GAP_UPDATE_16_Oct_2014.sav", to.data.frame=T)
-GAP_Panns<-GAP_database[,1:52]
-GAP_IDcodes<-read.csv("GAP_full_final_expression_database_22_04_2015_Dan_Marta_consent.csv")
-GAP_IDcodes<-GAP_IDcodes[GAP_IDcodes$CHIP_ID%in%data400$X,]
-
-GAP_Panns$id<-as.numeric(levels(GAP_Panns$id))
-
-GAP_Panns_ID<-merge(GAP_IDcodes[,2:4],GAP_Panns,by.x="GAP_ID",by.y="id")
-
-  
-GAP_Panns_ID$PannsScore<-NA
-GAP_Panns_ID$PannsPositive<-NA
-GAP_Panns_ID$PannsNegative<-NA
-GAP_Panns_ID$PannsPsycho<-NA
-for (patientx in 1:length(GAP_Panns_ID[,1])){  
-              GAP_Panns_ID[patientx,"PannsScore"]<-sum(as.numeric(GAP_Panns_ID[patientx,25:54]))
-              GAP_Panns_ID[patientx,"PannsPositive"]<-sum(as.numeric(GAP_Panns_ID[patientx,25:31]))
-              GAP_Panns_ID[patientx,"PannsNegative"]<-sum(as.numeric(GAP_Panns_ID[patientx,32:38]))
-              GAP_Panns_ID[patientx,"PannsPsycho"]<-sum(as.numeric(GAP_Panns_ID[patientx,39:54]))
-}
-
-colnames(GAP_Panns_ID)
-GAP_fullscore<-GAP_Panns_ID[,c(1:3,55:58)]
-#GAP_fullscore<-GAP_fullscore[complete.cases(GAP_fullscore),]
-write.csv(GAP_fullscore,file="GAP_PANNS_SCORES_WITH_IDs.csv")
-GAP_fullscore<-read.csv("GAP_PANNS_SCORES_WITH_IDs.csv")
-
-## Pans testing data
-Test_ids_with_pannss<-row.names(testingRFE)[row.names(testingRFE)%in%GAP_fullscore[,4]]
-model_predictions$Phenotype<-as.vector(testingRFE$Phenotype)
-model_predictions$CHIP_IDs<-row.names(testingRFE)
-model_predictions<-model_predictions[model_predictions$CHIP_IDs%in%Test_ids_with_pannss,]
-
-model_pred_pannss<-merge(model_predictions,GAP_fullscore,by.x="CHIP_IDs",by.y="CHIP_ID")
-
-testing_panns_scores<-model_pred_pannss[order(model_pred_pannss$PannsScore,decreasing = T),]
-
-testing_panns_scores$misclassed<-NA
-for (rowp in 1:length(testing_panns_scores[,1])){  
-        testing_panns_scores[rowp,"misclassed"]<-table(t(testing_panns_scores[rowp,2:14]))[1]
-}
-
-dim(testing_panns_scores)
-
-plot(testing_panns_scores$PannsScore,testing_panns_scores$misclassed)
-
-View(testing_panns_scores)[,c(2:14,21)]

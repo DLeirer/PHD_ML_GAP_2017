@@ -267,8 +267,14 @@ gbm_final <- train(Phenotype ~ ., data = expressionRFE, method = "gbm", metric =
 set.seed(seed)
 svmPoly_final <- train(Phenotype ~ ., data = expressionRFE, method = "svmPoly", metric = metric, trControl = fcontrol, verbose = FALSE, preProc = c("center", "scale"), tuneGrid = svmGrid)
 
-varimp100fold<-varImp(RF_final)
-varimp30fold
+
+#variable Importance
+importance <- varImp(RF_final, scale=FALSE)
+write.csv(print(importance),)
+write.table(print(importance$importance), file=paste(P1_output_dir,"p1_3_RF_model_simple_varImp.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+
+
+
 ```
 
 

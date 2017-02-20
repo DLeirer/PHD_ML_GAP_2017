@@ -40,8 +40,7 @@ names(testing_df)[1:26]
 full_data<-testing_df[,1:26]
 
 
-#
-
+#add rownames to predictions
 tpredictions<-data.frame(predict_train_fit)
 rownames(tpredictions)<-full_data$sampleID
 
@@ -52,6 +51,9 @@ model_test_pheno<-merge(tpredictions,full_data,by.x="row.names",by.y="sampleID")
 model_test_pheno<-model_test_pheno %>% mutate(ConfusionMatrix=ifelse(Phenotype == "FEP" & predict_train_fit=="control","FEP_misclassed",
                                             ifelse(Phenotype == "FEP" & predict_train_fit=="FEP","FEP_true",
                                             ifelse(Phenotype != "FEP" & predict_train_fit=="FEP","Control_misclassified","Control_true"))))
+# Center and Scale PRS
+model_test_pheno[19:27]<-scale(model_test_pheno[19:27])
+
 
 ```
 
@@ -79,3 +81,28 @@ write.table(table2print, file=paste(P1_output_dir,"p1_4_RF_model_Table_CM_1_meds
 
 
 
+## Create Table of variables
+```{r}
+
+dim(model_test_pheno)
+FEP_data<-filter(model_test_pheno,Phenotype=="FEP")
+
+
+SUMO3<-testing_df$SUMO3
+
+FEP_data<-testing_df
+FEP_data<-merge(tpredictions,FEP_data,by.x="row.names",by.y="sampleID")
+
+
+
+
+FEP_data<-filter(FEP_data,Phenotype=="FEP")
+FEP_data<-filter(FEP_data,Phenotype=="FEP")
+FEP_data<-FEP_data[complete.cases(FEP_data$Pol_1_GAP_all_strict_excl_WTCCC2),]
+FEP_data[19:27]<-scale(FEP_data[19:27])
+corPRS_genes<-cor(FEP_data[,-c(1:26)], method = c("pearson"))
+
+?sort
+sort(corPRS_genes[1,],decreasing = T)["SUMO3"]
+
+```

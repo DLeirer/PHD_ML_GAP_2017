@@ -21,164 +21,61 @@ library(dplyr)
 
 ##Set directories:
 ```{r directory}
-
+P1_output_dir <-"./P1_Hypothesis_Free/output/"
+P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
 ```
 
 
-#Functions
-```{r define functions, tidy=TRUE}
+## Check most important variables for GAP
+```{r}
 
-table_fun2<- function(mldata,main_var,file_name,prs_col=prs_col){
-  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(mldata)[prs_col])
-  catVars <- c("Ethnicity","Tobacco")
-  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c(main_var),includeNA = T)
-  table1print<-print(table1)
-  write.table(table1print, file=paste(P0_output_dir,file_name,"_Table_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
-}
+#use model to predict training data
+predict_train_fit<-predict.train(RF_final, newdata = testing_df)
+confusionMatrix(predict_train_fit, testing_df$Phenotype)
 
-  listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
-  catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
-  table2 <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,includeNA = T)
-  table2print<-print(table2)
-  write.table(table2print, file=paste(P0_output_dir,file_name,"_Table_2_Clinicalinformation.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
-}
+#check variables
+names(testing_df)[1:26]
+
+#create object to be used from now on. 
+full_data<-testing_df[,1:26]
+
+
+#
+
+tpredictions<-data.frame(predict_train_fit)
+rownames(tpredictions)<-full_data$sampleID
+
+
+#create test data with pheno predictions. 
+model_test_pheno<-merge(tpredictions,full_data,by.x="row.names",by.y="sampleID")
+## Make confusion matrix column
+model_test_pheno<-model_test_pheno %>% mutate(ConfusionMatrix=ifelse(Phenotype == "FEP" & predict_train_fit=="control","FEP_misclassed",
+                                            ifelse(Phenotype == "FEP" & predict_train_fit=="FEP","FEP_true",
+                                            ifelse(Phenotype != "FEP" & predict_train_fit=="FEP","Control_misclassified","Control_true"))))
+
 ```
-
 
 
 ## Create Table of variables
 ```{r}
 
 
-names(model_test_pheno)
-model_test_pheno[,c("Phenotype","predict_train_fit","ConfusionMatrix")]
-model_test_pheno_Backup<-model_test_pheno
-model_test_pheno[19:27]<-scale(model_test_pheno[19:27], center = TRUE, scale = TRUE)
-names(model_test_pheno)
-case_data=model_test_pheno[model_test_pheno$Phenotype == "FEP",]
-control_data=model_test_pheno[!model_test_pheno$Phenotype == "FEP",]
-
-
-## Make confusion matrix column
-model_test_pheno<-model_test_pheno %>% mutate(ConfusionMatrix=ifelse(Phenotype == "FEP" & predict_train_fit=="control","FEP_misclassed",
-                                            ifelse(Phenotype == "FEP" & predict_train_fit=="FEP","FEP_true",
-                                            ifelse(Phenotype != "FEP" & predict_train_fit=="FEP","Control_misclassified","Control_true"))))
-
-
-
+#Create Table of demographics with 4 predicted groups. 
 listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(model_test_pheno)[19:27])
 catVars <- c("Ethnicity","Tobacco")
 table1_full <- CreateTableOne(vars = listVars, data = model_test_pheno, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
 table1print<-print(table1_full)
 write.table(table1print, file=paste(P1_output_dir,"p1_4_RF_model_Table_CM_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
 
-case_data[case_data$predict_train_fit == "control",]
-
-length(case_data$predict_train_fit == "control")
-
-dim(case_data)
-names(control_data)
-table(control_data$predict_train_fit)
-table(case_data$predict_train_fit)
-
-listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(model_test_pheno)[19:27])
-catVars <- c("Ethnicity","Tobacco")
-table_fep1 <- CreateTableOne(vars = listVars, data = case_data, factorVars = catVars,strata=c("predict_train_fit"),includeNA = T)
-table_control2 <- CreateTableOne(vars = listVars, data = control_data, factorVars = catVars,strata=c("predict_train_fit"),includeNA = T)
-table1print<-print(table_fep1)
-table2print<-print(table_control2)
-write.table(table1print, file=paste(P0_output_dir,file_name,"_Table_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
-
-listVars <- c(names(model_test_pheno)[19:27])
-table_fep1 <- CreateTableOne(vars = listVars, data = case_data, strata=c("predict_train_fit"),includeNA = T)
-table_control2 <- CreateTableOne(vars = listVars, data = control_data, strata=c("predict_train_fit"),includeNA = T)
-table1print<-print(table_fep1)
-table2print<-print(table_control2)
-
-
-str(table_fep1)
-
+#Create Table of demographics with 4 predicted groups. 
 listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
 catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
-table_fep2 <- CreateTableOne(vars = listVars2, data = case_data, factorVars = catVars2,strata=c("predict_train_fit"),includeNA = T)
-table2print<-print(table_fep2)
-
+table2_full <- CreateTableOne(vars = listVars2, data = filter(model_test_pheno,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
+table2print<-print(table2_full)
+write.table(table2print, file=paste(P1_output_dir,"p1_4_RF_model_Table_CM_1_meds_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
 
 
 ```
-
-
-
-## Check most important variables for GAP
-```{r}
-
-
-predict_train_fit<-predict.train(RF_final, newdata = testing_df)
-confusionMatrix(predict_train_fit, testing_df$Phenotype)
-
-
-names(testing_df)[1:26]
-
-all.equal(names(training_df),names(testing_df))
-#full_data<-rbind(training_df,testing_df)
-full_data<-rbind(testing_df)
-
-
-## Pans Training Data
-
-predict_fit
-#Panns_positive<-GAP_fullscore[complete.cases(GAP_fullscore[,4]),]
-Panss_positive<-full_data[,1:26]
-#Panss_positive<-Panns_positive[complete.cases(Panss_positive$PanssPositive),]
-#Panss_positive<-Panss_positive[complete.cases(Panss_positive$PanssScore),]
-#Panss_positive<-Panss_positive[complete.cases(Panss_positive$PanssNegative),]
-#tpredictions<-training_predictions
-
-Panss_positive
-
-#modified
-#tpredictions<-data.frame(predict_train_fit)
-tpredictions<-data.frame(predict_train_fit)
-rownames(tpredictions)<-Panss_positive$sampleID
-
-model_test_pheno<-merge(tpredictions,Panss_positive,by.x="row.names",by.y="sampleID")
-
-
-
-names(model_test_pheno)
-panss_ploting<-model_train_pred_pannss[,c("predict_train_fit","PanssScore","PanssPositive","PanssNegative","PanssPsycho" )]
-panss_ploting<-model_train_pred_pannss[,c("predict_train_fit","PanssPositive","PanssNegative","PanssPsycho" )]
-
-panss_ploting<-melt(panss_ploting,id="predict_train_fit")
-colnames(panss_ploting)<-c("ML_Model","Subscale","PANSS_Scores")
-
-
-ggplot(panss_ploting,
-  aes( ML_Model,PANSS_Scores,colour = ML_Model)) +
-  #geom_point() + 
-  geom_boxplot() +
-  geom_jitter()+
-  facet_wrap(~Subscale) 
-
-
-#Calculate P-values
-pvalues1<-NULL
-for (rowp in 2:5){  
-    pvalues1[rowp-1]<-t.test(panss_ploting[,rowp]~panss_ploting$predict_train_fit)$p.value
-}
-
-pvalues1
-
-p.adjust(pvalues1,"bonferroni")
-
-training_panns_results[order(training_panns_results$correct_class_percentage,decreasing = T),]
-
-mean(training_panns_results[,1])
-mean(training_panns_results[,2])
-mean(training_panns_results[,3])
-
-```
-
 
 
 

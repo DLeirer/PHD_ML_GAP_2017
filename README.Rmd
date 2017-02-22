@@ -107,6 +107,31 @@ LumiBatch object.
 
 
 
+# Subproject 2: Hypothesis Driven
+**Aims:**   
+Differential Expression adjusting for Ethnciity Age and Gender using Limma.
+
+
+**Input:**  
+LumiBatch object.  
+.  
+
+**Script_Strategy:**    
+  
+1. *p2_1_GAP_Feature_selection_07_02_2017.Rmd*
++ Feature Selection based on Purcell List.   
+2. *p2_2_GAP_Machine_learning_07_02_2017.Rmd*
++ Script that screens for best model.  
++ Script also plots
+3. *p2_3_GAP_Tuning_07_02_2017.Rmd*
++ Script that tunes best 3 models.  
++ Validate in test data.  
+4. *p2_4_GAP_Variables_test_07_02_2017.Rmd*  
++ Check classied samples by PANSS, sex, ethnicty, age, tobacco, ICD10, medication and PRS.  
+4. *p2_5_GAP_Enrichment_test_07_02_2017.Rmd*  
++ Find most important genes.  
++ Check for enrichment in core genes.  
+
 
 
 ---
@@ -200,6 +225,18 @@ Medication Data, Weight, Smoking, Some Demographics.
 Source:  
 Diego Quattrone compiled this file. 
 diego.quattrone@kcl.ac.uk
+
+File: **Pirooznia_enrichment_categories**  
+*Hypothesis_driven_source_Purcell_2014.csv*  
+
+Description:  
+1796 genes list compiled by Purcell et al.   
+
+Source:  
+A polygenic burden of rare disruptive mutations in schizophrenia, 2014, Nature Purcell et al.   
+PMID: 24463508.  
+http://www.nature.com/nature/journal/v506/n7487/full/nature12975.html#tables  
+
 
 
 #Acknoledgements

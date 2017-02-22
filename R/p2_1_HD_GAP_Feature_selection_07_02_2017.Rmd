@@ -1,0 +1,194 @@
+---
+title: "Feature Selection"
+author: "DJL"
+date: "02/10/2016"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(lumi)
+library(randomForest)
+library(lubridate)
+library(doMC)
+library(caret)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+```
+#Functions
+```{r define functions, tidy=TRUE}
+
+cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
+  # find highly correlated probes
+  correlationMatrix <- cor(gene_exprs_DF)
+  # find attributes that are highly corrected (ideally >0.75)
+  findCorrelation(correlationMatrix, cutoff=cor_cutoff)
+
+}
+
+
+```
+
+
+#Directories
+```{r Define directories}
+data_dir <-"./P0_Characterise/output/"
+data_dir0 <-"./data/"
+P2_output_dir <-"./P2_Hypothesis_Free/output/"
+P2_figs_dir <-"./P2_Hypothesis_Free/figs/"
+
+
+```
+
+#Load Data
+```{r Load data}
+load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
+#Pirooznia gene lists
+Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
+
+
+
+```
+
+#Process Pirooznia gene lists
+```{r Load data}
+
+#table of genesets
+table(Genesets_HD$Eclass)
+#extract gene sets
+SCZ_comp<-filter(Genesets_HD, Eclass=="Scz-composite")
+PGC_SCZ<-filter(Genesets_HD, Eclass=="PGC_SCZ")
+PGC_BP<-filter(Genesets_HD, Eclass=="PGC_BP")
+PGC_MDD<-filter(Genesets_HD, Eclass=="PGC_MDD")
+
+#Check dimensions
+dim(SCZ_comp)
+dim(PGC_SCZ)
+dim(PGC_BP)
+dim(PGC_MDD)
+
+#Compare genesets
+table(PGC_SCZ[,1]%in%SCZ_comp[,1])
+table(PGC_BP[,1]%in%SCZ_comp[,1])
+table(PGC_MDD[,1]%in%SCZ_comp[,1])
+
+#GAP all probes.
+background_GAP<-colnames(testing_df)[-c(1:26)]
+length(background_GAP)
+table(background_GAP%in%Genesets_HD$Gene_names)
+table(background_GAP%in%SCZ_comp[,1])
+table(background_GAP%in%PGC_SCZ[,1])
+table(background_GAP%in%PGC_BP[,1])
+table(background_GAP%in%PGC_MDD[,1])
+
+```
+
+#Define Cores and Seed
+```{r Define Cores and Seed}
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+```
+
+
+# Feature selection
+```{r feature selection}
+
+#Define number of columns not corresponding to Probes (HAVE TO BE AT THE START of data)
+Non_Probes=26 
+
+#make dataset of features that are not probes for backup and later use.
+training_df_np = training_df[,c(1:Non_Probes)]
+names(training_df_np)
+str(training_df_np)
+#ONLY KEEP PHENOTYPE
+training_df = training_df[,-c(1:4,6:Non_Probes)]
+names(training_df)[1:30]
+#find highly correlated probes set to 80 by default.
+highlyCorrelated<-cor_fun(training_df[,-c(1)],cor_cutoff=0.8)
+highlyCorrelated
+
+
+# remove highly correlated probes
+training_cor_df<-training_df[,-c(highlyCorrelated+Non_Probes)]
+
+#Check dimensions
+dim(training_df)
+dim(training_cor_df)
+
+############## Recursive Feature Elimnation ###################
+### Define Class Labels
+class_labels <- droplevels(as.factor(training_cor_df[,1]))
+
+
+### Normalise
+gx_predictors=training_cor_df[,-1]
+normalization <- preProcess(gx_predictors)
+gx_predictors <- predict(normalization, gx_predictors)
+gx_predictors <- as.data.frame(gx_predictors)
+# Select different subsets to calculate. 
+subsets <- c(50,100,150,200,250,300)
+
+
+#set seed
+set.seed(seed)
+#set control parameters 
+control <- rfeControl(functions=rfFuncs, #Random Forrest based
+                      method="repeatedcv", #Repeated CV
+                      number=10, #10 folds
+                      repeats=20, #10 repeats
+                      verbose = FALSE)
+
+# run the RFE algorithm
+rfe_output <- rfe(gx_predictors, class_labels, sizes=subsets, rfeControl=control)
+rfe_output_prepro<-rfe_output
+rfe_output <- rfe(x=training_cor_df[,-1], y=class_labels, sizes=subsets, rfeControl=control)
+#Save output files
+save(rfe_output, rfe_output_prepro, file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""), compress = T)
+load(paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
+
+```
+
+
+# Report of RFE results
+```{r feature selection report}
+
+# output
+rfe_output
+rfe_output_prepro
+
+
+
+
+# predictors
+rfepredictors<-predictors(rfe_output)
+rfepredictors_prepro<-predictors(rfe_output_prepro)
+
+
+# Save list of top predictors
+write.table(rfepredictors, file=paste(P1_output_dir,"rfe_predictors.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+write.table(rfepredictors_prepro, file=paste(P1_output_dir,"rfe_predictors_prepro.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+
+# save Plot of different predictor sizes and accuracy.
+jpeg(paste(P1_figs_dir,"RFE_SC.jpg"))
+plot(rfe_output_prepro, type = c("g", "o"),col="red", main="Recursive Feature Elimination (Scaled / Centered)")
+dev.off()
+jpeg(paste(P1_figs_dir,"RFE.jpg"))
+plot(rfe_output, type = c("g", "o"),col="green",main="Recursive Feature Elimination")
+dev.off()
+```
+
+
+

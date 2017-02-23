@@ -42,14 +42,15 @@ cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
 ```{r Define directories}
 data_dir <-"./P0_Characterise/output/"
 data_dir0 <-"./data/"
-P2_output_dir <-"./P2_Hypothesis_Free/output/"
-P2_figs_dir <-"./P2_Hypothesis_Free/figs/"
+output_dir <-"./P2_Hypothesis_Driven/output/"
+figs_dir <-"./P2_Hypothesis_Driven/figs/"
 
 
 ```
 
 #Load Data
 ```{r Load data}
+#
 load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
 #Pirooznia gene lists
 Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
@@ -89,6 +90,13 @@ table(background_GAP%in%PGC_SCZ[,1])
 table(background_GAP%in%PGC_BP[,1])
 table(background_GAP%in%PGC_MDD[,1])
 
+#Hypothesis driven Probes
+final_hd_probes<-background_GAP[background_GAP%in%Genesets_HD$Gene_names]
+
+#Check that there are no duplicates
+table(duplicated(final_hd_probes))
+
+
 ```
 
 #Define Cores and Seed
@@ -114,32 +122,39 @@ training_df_np = training_df[,c(1:Non_Probes)]
 names(training_df_np)
 str(training_df_np)
 #ONLY KEEP PHENOTYPE
-training_df = training_df[,-c(1:4,6:Non_Probes)]
-names(training_df)[1:30]
+training_df_s = training_df[,-c(1:4,6:Non_Probes)]
+names(training_df_s)[1:30]
+
+####### Skip correlation in this case. ############
 #find highly correlated probes set to 80 by default.
-highlyCorrelated<-cor_fun(training_df[,-c(1)],cor_cutoff=0.8)
-highlyCorrelated
+#highlyCorrelated<-cor_fun(training_df_s[,-c(1)],cor_cutoff=0.8)
+#highlyCorrelated
 
 
 # remove highly correlated probes
-training_cor_df<-training_df[,-c(highlyCorrelated+Non_Probes)]
+#training_cor_df<-training_df_s[,-c(highlyCorrelated+Non_Probes)]
+
+#### Hypothesis Driven only. Subset to hypothesis probes.
+training_df_HD<-training_df_s[,c("Phenotype",final_hd_probes)]
+dim(training_df_HD)
+
 
 #Check dimensions
-dim(training_df)
-dim(training_cor_df)
+dim(training_df_s)
+dim(training_df_HD)
 
 ############## Recursive Feature Elimnation ###################
 ### Define Class Labels
-class_labels <- droplevels(as.factor(training_cor_df[,1]))
+class_labels <- droplevels(as.factor(training_df_HD[,1]))
 
 
-### Normalise
-gx_predictors=training_cor_df[,-1]
-normalization <- preProcess(gx_predictors)
-gx_predictors <- predict(normalization, gx_predictors)
-gx_predictors <- as.data.frame(gx_predictors)
+### Normalise Skip this
+#gx_predictors=training_df_HD[,-1]
+#normalization <- preProcess(gx_predictors)
+#gx_predictors <- predict(normalization, gx_predictors)
+#gx_predictors <- as.data.frame(gx_predictors)
 # Select different subsets to calculate. 
-subsets <- c(50,100,150,200,250,300)
+subsets <- c(1:40)*10
 
 
 #set seed
@@ -148,16 +163,17 @@ set.seed(seed)
 control <- rfeControl(functions=rfFuncs, #Random Forrest based
                       method="repeatedcv", #Repeated CV
                       number=10, #10 folds
-                      repeats=20, #10 repeats
+                      repeats=3, #10 repeats
                       verbose = FALSE)
 
 # run the RFE algorithm
-rfe_output <- rfe(gx_predictors, class_labels, sizes=subsets, rfeControl=control)
-rfe_output_prepro<-rfe_output
-rfe_output <- rfe(x=training_cor_df[,-1], y=class_labels, sizes=subsets, rfeControl=control)
+#rfe_output <- rfe(gx_predictors, class_labels, sizes=subsets, rfeControl=control)
+#rfe_output_prepro<-rfe_output
+rfe_output <- rfe(x=training_df_HD[,-1], y=class_labels, sizes=subsets, rfeControl=control)
 #Save output files
-save(rfe_output, rfe_output_prepro, file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""), compress = T)
-load(paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
+#save(rfe_output, rfe_output_prepro, file=paste(output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""), compress = T)
+save(rfe_output, file=paste(output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""), compress = T)
+load(paste(output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
 ```
 
@@ -167,25 +183,25 @@ load(paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
 # output
 rfe_output
-rfe_output_prepro
+#rfe_output_prepro
 
 
 
 
 # predictors
 rfepredictors<-predictors(rfe_output)
-rfepredictors_prepro<-predictors(rfe_output_prepro)
+#rfepredictors_prepro<-predictors(rfe_output_prepro)
 
 
 # Save list of top predictors
-write.table(rfepredictors, file=paste(P1_output_dir,"rfe_predictors.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
-write.table(rfepredictors_prepro, file=paste(P1_output_dir,"rfe_predictors_prepro.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+write.table(rfepredictors, file=paste(output_dir,"rfe_predictors.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+#write.table(rfepredictors_prepro, file=paste(output_dir,"rfe_predictors_prepro.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
 
 # save Plot of different predictor sizes and accuracy.
-jpeg(paste(P1_figs_dir,"RFE_SC.jpg"))
-plot(rfe_output_prepro, type = c("g", "o"),col="red", main="Recursive Feature Elimination (Scaled / Centered)")
-dev.off()
-jpeg(paste(P1_figs_dir,"RFE.jpg"))
+#jpeg(paste(figs_dir,"RFE_SC.jpg"))
+#plot(rfe_output_prepro, type = c("g", "o"),col="red", main="Recursive Feature Elimination (Scaled / Centered)")
+#dev.off()
+jpeg(paste(figs_dir,"RFE.jpg"))
 plot(rfe_output, type = c("g", "o"),col="green",main="Recursive Feature Elimination")
 dev.off()
 ```

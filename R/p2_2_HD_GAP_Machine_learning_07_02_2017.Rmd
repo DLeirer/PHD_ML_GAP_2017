@@ -98,6 +98,45 @@ simple_model_fun<- function(ml_model,tol_percentage = 1, metric_sm=metric) {
     tolerance(ml_model$results, metric = metric_sm, tol = tol_percentage, maximize = TRUE)    
 }
 
+#helper Function for creation stratified by confusionmatrix result data frame when making tables of enviroment vs classification 
+create_table_df<-function(input_data,use_columns,ml_data_predictions){
+  #create object to be used from now on. 
+  full_data<-input_data[,1:use_columns]
+  #add rownames to predictions
+  tpredictions<-data.frame(ml_data_predictions)
+  rownames(tpredictions)<-full_data$sampleID
+
+
+  #create test data with pheno predictions. 
+  model_test_pheno<-merge(tpredictions,full_data,by.x="row.names",by.y="sampleID")
+  ## Make confusion matrix column
+  model_test_pheno<-model_test_pheno %>% mutate(ConfusionMatrix=ifelse(Phenotype == "FEP" & ml_data_predictions=="control","FEP_misclassed",
+                                            ifelse(Phenotype == "FEP" & ml_data_predictions=="FEP","FEP_true",
+                                            ifelse(Phenotype != "FEP" & ml_data_predictions=="FEP","Control_misclassified","Control_true"))))
+  # Center and Scale PRS
+  model_test_pheno[19:27]<-scale(model_test_pheno[19:27])
+  return (model_test_pheno)
+}
+
+
+# Function for making tables of confusion matrix stratified dataframes of ml models
+table_fun_ml<- function(mldata,out_name_id,prs_col=(19:27)){
+  #output name of model define
+  t_title=out_name_id
+  #Create Table of demographics with 4 predicted groups.
+  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(mldata)[prs_col])
+  catVars <- c("Ethnicity","Tobacco")
+  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
+  table1print<-print(table1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+  write.csv(table1print, file=paste(output_dir,project_id,"_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
+
+  #Create Table of demographics with 4 predicted groups. 
+  listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+  catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
+  table2_full <- CreateTableOne(vars = listVars2, data = filter(model_test_pheno,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
+  table2print<-print(table2_full,quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+  write.csv(table2print, paste(output_dir,project_id,"_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+}
 
 ```
 
@@ -274,7 +313,7 @@ write.table(print(importance$importance), file=paste(output_dir,project_id,"_",t
 
 #Resample of top performers and top low complexity performers. 
 ```{r complexity vs accuracy}
-High_Low_complexity_model_list<-list(RF_complex = RF_fit, RF_simple=RF_fit_simple)
+High_Low_complexity_model_list<-list(RF_complex = RF_fit, RF_simple=RF_fit_simple,c50_complex=c50_fit,nb_fit=nb_fit)
 
 #Summary and Plot. 
 ml_resample<-resamples(High_Low_complexity_model_list)
@@ -286,8 +325,7 @@ resamps=ml_resample
 ```{r Compare}
 str(resamps)
 #define names of models for plot
-#Model_names<-c("RF_Complex","RF_Simple","GBM_Complex","GBM_Simple","svmPoly_Complex","svmPoly_Simple")
-Model_names<-c("RF_Complex","RF_Simple")
+Model_names<-c("RF_Complex","RF_Simple","c50_complex","nb_fit")
 #plot comparing models
 Accuracy_results<-resamps$values[,grep("*Accuracy",colnames(resamps$values))]
 colnames(Accuracy_results)<-Model_names
@@ -296,7 +334,6 @@ accuracy_plot$Datasets<-c("RFE(GAP)")
 accuracy_plot2<-melt(accuracy_plot, id="Datasets")
 colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
 
-accuracy_plot2
 
 title_final_models<-"Comparision of High and Low Complexity Models"
 s_title="Hi_Lo_complexity_model_comparision"
@@ -310,14 +347,6 @@ ggplot(accuracy_plot2,
 ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_.png",sep=""))
 
 
-s_title="Dotplot_comparing_cv"
-ggplot(accuracy_plot2,
-  aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
-  geom_point() + 
-  geom_boxplot()+
-  coord_flip()+
-  ggtitle("Accuracy of 10x10-fold cross validation for 11 Models")
-ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""))
 ```
 
 #Save all models for reference
@@ -325,7 +354,7 @@ ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""
 
 
 #Save Models
-save(High_Low_complexity_model_list, file=paste(P1_output_dir,"P1_3_High_Low_complexity_model_list.rdata",sep=""), compress = T)
+save(High_Low_complexity_model_list, file=paste(output_dir,project_id,"_High_Low_complexity_model_list.rdata",sep=""), compress = T)
 
 ```
 
@@ -335,24 +364,11 @@ save(High_Low_complexity_model_list, file=paste(P1_output_dir,"P1_3_High_Low_com
 ```{r Validation}
 
 #Predictions
-predict_fit<-predict(gbmFit, newdata = testing_df)
+predict_fit<-predict(RF_fit, newdata = testing_df)
 confusionMatrix(predict_fit, testing_df$Phenotype)
-
-predict_fit<-predict(gbm_final, newdata = testing_df)
+predict_fit<-predict(c50_fit, newdata = testing_df)
 confusionMatrix(predict_fit, testing_df$Phenotype)
-
-
-predict_fit<-predict(RF_search, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
-
-predict_fit<-predict(RF_final, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
-
-
-predict_fit<-predict(svmPolyFit2, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
-
-predict_fit<-predict(svmPoly_final, newdata = testing_df)
+predict_fit<-predict(nb_fit, newdata = testing_df)
 confusionMatrix(predict_fit, testing_df$Phenotype)
 
 
@@ -360,66 +376,33 @@ confusionMatrix(predict_fit, testing_df$Phenotype)
 
 
 
-## Check most important variables for GAP
+## Check most important variables for models and plot tables
 ```{r}
 
-#use model to predict training data
-predict_train_fit<-predict.train(RF_fit, newdata = testing_df)
-confusionMatrix(predict_train_fit, testing_df$Phenotype)
-
-#check variables
-names(testing_df)[1:26]
-
-#create object to be used from now on. 
-full_data<-testing_df[,1:26]
-
-
-#add rownames to predictions
-tpredictions<-data.frame(predict_train_fit)
-rownames(tpredictions)<-full_data$sampleID
-
-
-#create test data with pheno predictions. 
-model_test_pheno<-merge(tpredictions,full_data,by.x="row.names",by.y="sampleID")
-## Make confusion matrix column
-model_test_pheno<-model_test_pheno %>% mutate(ConfusionMatrix=ifelse(Phenotype == "FEP" & predict_train_fit=="control","FEP_misclassed",
-                                            ifelse(Phenotype == "FEP" & predict_train_fit=="FEP","FEP_true",
-                                            ifelse(Phenotype != "FEP" & predict_train_fit=="FEP","Control_misclassified","Control_true"))))
-# Center and Scale PRS
-model_test_pheno[19:27]<-scale(model_test_pheno[19:27])
-
-
-```
-
-
-## Create Table of variables
-```{r}
-
-
-#Create Table of demographics with 4 predicted groups.
-t_title="RF_model_Table_CM_1"
-listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(model_test_pheno)[19:27])
-catVars <- c("Ethnicity","Tobacco")
-table1_full <- CreateTableOne(vars = listVars, data = model_test_pheno, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
-table1print<-print(table1_full)
-write.table(table1print, file=paste(output_dir,project_id,"_",t_title,"_","Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = "\t")
-write.table(table1print, file=paste(output_dir,project_id,"_",t_title,"_","Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE)
-
-#Create Table of demographics with 4 predicted groups. 
-t_title="RF_model_Table_CM_1_meds"
-listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
-catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
-table2_full <- CreateTableOne(vars = listVars2, data = filter(model_test_pheno,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
-table2print<-print(table2_full)
-write.table(table2print, paste(output_dir,project_id,"_",t_title,"_","Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = "\t")
-
+#Define models
+modellist_table<-list(RF_fit,c50_fit,nb_fit)
+#Define model names
+modelnames<-c("RF_fit","c50_fit","nb_fit")
+#iterate over models to plot
+for (i in 1:length(modelnames)){
+  #pick model and name  
+  input_model=modellist_table[[i]]
+  input_model_name=modelnames[i]
+  #use model to predict training data
+  predict_train_fit<-predict.train(input_model, newdata = testing_df)
+  #make dataframes
+  model_strat_confuse_df<-create_table_df(testing_df,26,predict_train_fit)
+  #plot tables
+  table_fun_ml(model_strat_confuse_df,input_model_name)
+}
 
 
 ```
 
 
 
-## Create Table of variables
+####################################################################################################
+## UNFINISHED IDEAS
 ```{r}
 
 dim(model_test_pheno)

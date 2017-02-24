@@ -225,13 +225,16 @@ tunelength <- 20
 
 #Run Parameter Search.
 set.seed(seed)
-RF_fit <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl=tunecontrol,tuneLength=tunelength) 
+RF_fit <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl=tunecontrol,tuneGrid=expand.grid(.mtry=(1:8))) 
+#RF_fit <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl=tunecontrol,tuneLength=tunelength) 
 set.seed(seed)
 nb_fit <-train(Phenotype~., data=expressionRFE, method="nb", metric=metric, tuneLength=tunelength, trControl=tunecontrol)
 set.seed(seed)
 c50_fit <-train(Phenotype~., data=expressionRFE, method="C5.0", metric=metric, tuneLength=tunelength, trControl=tunecontrol)
 
-sq
+
+
+
 #Plots
 s_title="RF_tuning"
 ggplot(RF_fit)+
@@ -254,46 +257,24 @@ ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""
 
 #####   Find least complex model within 1 percent of top performance
 simpleRF<-as.numeric(RF_fit$results[simple_model_fun(ml_model=RF_fit),][1,])
-simplec50<-as.numeric(c50_fit$results[simple_model_fun(ml_model=c50_fit),][1,])
-simple_model_fun(ml_model=c50_fit)
 
-#####   Define Grid searches. Etc. 
-fcontrol <- trainControl(method="repeatedcv", number=10, repeats=3, sampling="down", savePredictions="all")
-
-
-rftGrid <- expand.grid(.mtry=simpleRF[1])
-gbmGrid <- expand.grid(shrinkage = simpleGBM[1],interaction.depth = simpleGBM[2],n.minobsinnode = simpleGBM[3], n.trees = simpleGBM[4])
-svmGrid <-  expand.grid(degree = simplePoly[1], scale = simplePoly[2],C = simplePoly[3])
-
-predict(RF_fit$results[4,], newdata = testing_df)
-predict(RF_fit, newdata = testing_df)
-predict(RF_fit, newdata = testing_df, type="prob")
-
-
-
-train(Phenotype ~ ., data = expressionRFE, method = "gbm", metric = metric, trControl = GBMcontrol, verbose = FALSE,tuneGrid = gbmGrid)
-#####   Run models
+#### Simplefy 
 set.seed(seed)
-RF_final <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl= fcontrol, verbose = FALSE, tuneGrid=rftGrid) 
-set.seed(seed)
-gbm_final <- train(Phenotype ~ ., data = expressionRFE, method = "gbm", metric = metric, trControl = fcontrol, verbose = FALSE, tuneGrid = gbmGrid)
-set.seed(seed)
-svmPoly_final <- train(Phenotype ~ ., data = expressionRFE, method = "svmPoly", metric = metric, trControl = fcontrol, verbose = FALSE, preProc = c("center", "scale"), tuneGrid = svmGrid)
+RF_fit_simple <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl=tunecontrol,tuneGrid=expand.grid(.mtry=(simpleRF[1]))) 
 
 
 #variable Importance
-importance <- varImp(RF_fit, scale=FALSE)
+importance <- varImp(RF_fit_simple, scale=FALSE)
 print(importance)
-write.table(print(importance$importance), file=paste(P1_output_dir,"p1_3_RF_model_simple_varImp.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
-
-
+t_title="RF_model_simple"
+write.table(print(importance$importance), file=paste(output_dir,project_id,"_",t_title,"_","varImp.csv",sep=""),row.names=T,quote=FALSE,sep = ",")
 
 ```
 
 
 #Resample of top performers and top low complexity performers. 
 ```{r complexity vs accuracy}
-High_Low_complexity_model_list<-list(RF = RF_search, RF_simple=RF_final, GBM = gbmFit, GBM_simple = gbm_final, svmPoly = svmPolyFit2, svmPoly_simple = svmPoly_final)
+High_Low_complexity_model_list<-list(RF_complex = RF_fit, RF_simple=RF_fit_simple)
 
 #Summary and Plot. 
 ml_resample<-resamples(High_Low_complexity_model_list)
@@ -305,7 +286,8 @@ resamps=ml_resample
 ```{r Compare}
 str(resamps)
 #define names of models for plot
-Model_names<-c("RF_Complex","RF_Simple","GBM_Complex","GBM_Simple","svmPoly_Complex","svmPoly_Simple")
+#Model_names<-c("RF_Complex","RF_Simple","GBM_Complex","GBM_Simple","svmPoly_Complex","svmPoly_Simple")
+Model_names<-c("RF_Complex","RF_Simple")
 #plot comparing models
 Accuracy_results<-resamps$values[,grep("*Accuracy",colnames(resamps$values))]
 colnames(Accuracy_results)<-Model_names
@@ -317,6 +299,7 @@ colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
 accuracy_plot2
 
 title_final_models<-"Comparision of High and Low Complexity Models"
+s_title="Hi_Lo_complexity_model_comparision"
 ggplot(accuracy_plot2,
        aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
   geom_point() + 
@@ -324,9 +307,17 @@ ggplot(accuracy_plot2,
   geom_jitter()+
   coord_flip()+
   ggtitle(title_final_models)
-ggsave(paste(P1_figs_dir,"p1_3_Hi_Lo_complexity_model_comparision_.png",sep=""))
+ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_.png",sep=""))
 
 
+s_title="Dotplot_comparing_cv"
+ggplot(accuracy_plot2,
+  aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
+  geom_point() + 
+  geom_boxplot()+
+  coord_flip()+
+  ggtitle("Accuracy of 10x10-fold cross validation for 11 Models")
+ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""))
 ```
 
 #Save all models for reference
@@ -412,7 +403,7 @@ catVars <- c("Ethnicity","Tobacco")
 table1_full <- CreateTableOne(vars = listVars, data = model_test_pheno, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
 table1print<-print(table1_full)
 write.table(table1print, file=paste(output_dir,project_id,"_",t_title,"_","Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = "\t")
-
+write.table(table1print, file=paste(output_dir,project_id,"_",t_title,"_","Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE)
 
 #Create Table of demographics with 4 predicted groups. 
 t_title="RF_model_Table_CM_1_meds"

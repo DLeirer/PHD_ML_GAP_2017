@@ -81,16 +81,23 @@ ml_fun<- function(dataset) {
 #Directories
 ```{r Define directories}
 data_dir <-"./P0_Characterise/output/"
-P1_output_dir <-"./P1_Hypothesis_Free/output/"
-P1_figs_dir <-"./P1_Hypothesis_Free/figs/"
+output_dir <-"./P2_Hypothesis_Driven/output/"
+figs_dir <-"./P2_Hypothesis_Driven/figs/"
+
+#Pre and post fixes.
+project_name = "Hypothesis_Driven"
+project_id = "p2_2"
 
 ```
+
+
+
 
 #Load Data
 ```{r Load data}
 
 load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
-load(file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
+load(file=paste(output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
 
 ```
@@ -128,7 +135,7 @@ expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
 ml_models<-ml_fun(expressionRFE)
 
 #Save Models
-save(ml_models, file=paste(P1_output_dir,"Classification_models.rdata",sep=""), compress = T)
+save(ml_models, file=paste(output_dir,"Classification_models.rdata",sep=""), compress = T)
 
 ```
 
@@ -147,17 +154,18 @@ Acc_results<-ml_resample$values[,grep("*Accuracy",colnames(ml_resample$values))]
 ## Plot 
 
 #single point
+s_title=
 Accuracy_results<-sapply(Acc_results,mean)
 accuracy_plot<-as.data.frame(Accuracy_results)
 accuracy_plot<-as.data.frame(Accuracy_results)
 accuracy_plot$Algorithm<-row.names(accuracy_plot)
+
+s_title="Dotplot_comparing"
 ggplot(accuracy_plot,
   aes(x=Accuracy_results,y=Algorithm,color=Algorithm)) +
   geom_point()+ 
   ggtitle("Average accuracy of 10x10-fold cross validation for 11 Models")
-ggsave(paste(P1_figs_dir,"Dotplot_comparing_models_Hypothesis_Free.png",sep=""))
-
-
+ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""))
 results<-ml_resample
 
 #all points
@@ -168,14 +176,16 @@ accuracy_plot2<-melt(accuracy_plot, id="Datasets")
 colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
 
 table(accuracy_plot2[,3])
-
+s_title="Dotplot_comparing_cv"
 ggplot(accuracy_plot2,
   aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
   geom_point() + 
   geom_boxplot()+
   coord_flip()+
   ggtitle("Accuracy of 10x10-fold cross validation for 11 Models")
-ggsave(paste(P1_figs_dir,"Dotplot_comparing_CV_hypothesis_free.png",sep=""))
+ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""))
+
+ggsave(paste(figs_dir,"Dotplot_comparing_CV_hypothesis_free.png",sep=""))
 
 
 ```

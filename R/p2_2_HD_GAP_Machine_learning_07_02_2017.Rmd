@@ -104,7 +104,9 @@ simple_model_fun<- function(ml_model,tol_percentage = 1, metric_sm=metric) {
 
 #Directories
 ```{r Define directories}
+top_dir<-getwd()
 data_dir <-"./P0_Characterise/output/"
+data_dir0 <-"./data/"
 output_dir <-"./P2_Hypothesis_Driven/output/"
 figs_dir <-"./P2_Hypothesis_Driven/figs/"
 
@@ -449,5 +451,58 @@ corPRS_genes<-cor(FEP_data[,-c(1:26)], method = c("pearson"))
 
 ?sort
 sort(corPRS_genes[1,],decreasing = T)["SUMO3"]
+
+
+library(WGCNA)
+#Pirooznia gene lists
+Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
+
+SCZ_comp<-filter(Genesets_HD, Eclass=="Scz-composite")
+PGC_SCZ<-filter(Genesets_HD, Eclass=="PGC_SCZ")
+PGC_BP<-filter(Genesets_HD, Eclass=="PGC_BP")
+PGC_MDD<-filter(Genesets_HD, Eclass=="PGC_MDD")
+
+#Compare genesets
+table(PGC_SCZ[,1]%in%SCZ_comp[,1])
+table(PGC_BP[,1]%in%SCZ_comp[,1])
+table(PGC_MDD[,1]%in%SCZ_comp[,1])
+
+#GAP all probes.
+background_GAP<-colnames(testing_df)[-c(1:26)]
+length(background_GAP)
+table(background_GAP%in%Genesets_HD$Gene_names)
+table(background_GAP%in%SCZ_comp[,1])
+table(background_GAP%in%PGC_SCZ[,1])
+table(background_GAP%in%PGC_BP[,1])
+table(background_GAP%in%PGC_MDD[,1])
+
+#Hypothesis driven Probes
+final_hd_probes<-background_GAP[background_GAP%in%Genesets_HD$Gene_names]
+
+
+psycho_genes<-as.data.frame(cbind(final_hd_probes,final_hd_probes))
+colnames(psycho_genes)<-c("final_hd_probes","Groups")
+psycho_genes$Groups <- final_hd_probes%in%opt_rfepredictors
+psycho_genes$Groups<-replace(psycho_genes$Groups, psycho_genes$Groups=="FALSE","background")
+psycho_genes$Groups<-replace(psycho_genes$Groups, psycho_genes$Groups=="TRUE","Psychosis")
+
+library(data.table)
+
+setwd(top_dir)
+setwd(data_dir0)
+enrichments = userListEnrichment(psycho_genes$final_hd_probes,psycho_genes$Groups,fnIn=c("GeneSetsMental_Pirooznia_2016.csv"),catNmIn=c("Pirooznia"),useBrainLists=F,useBrainRegionMarkers = F,useBloodAtlases = F,useImmunePathwayLists = F,minGenesInCategory = 5)
+#enrichments = userListEnrichment(all_probes$TargetID,all_probes$Groups,useBrainLists=T)
+setwd(top_dir)
+enpv<-enrichments$pValue
+enrichment_probes<-unlist(lapply(enrichments$ovGenes,paste, collapse =";"))
+enpv$Genes<-enrichment_probes
+enpv<-enpv[order(enpv$InputCategories,enpv$Pvalues),]
+enpvDT<-data.table(enpv)
+#enpvDT<-enpvDT[Pvalues < 0.05 & NumOverlap > 5,.SD[],by=InputCategories]
+##Select top 20, add pvalue < 0.05
+enpvDT<-enpvDT[,.SD[1:20],by=InputCategories]
+enpvDT
+
+write.csv(as.data.frame(enpvDT),file=paste(P3_output_dir,"Supplementary_Table_9_User_list_enrichment_diff_expression_results.csv",sep=""),row.names=F)
 
 ```

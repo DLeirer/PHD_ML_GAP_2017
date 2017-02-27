@@ -26,6 +26,7 @@ library(doMC)
 library(caret)
 library(reshape)
 library(tableone)
+library(stargazer)
 ```
 
 #Functions
@@ -123,20 +124,30 @@ create_table_df<-function(input_data,use_columns,ml_data_predictions){
 table_fun_ml<- function(mldata,out_name_id,prs_col=(19:27)){
   #output name of model define
   t_title=out_name_id
+  latex="_latex"
+  latex="_latex"
   #Create Table of demographics with 4 predicted groups.
   listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(mldata)[prs_col])
   catVars <- c("Ethnicity","Tobacco")
   table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
   table1print<-print(table1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
-  write.csv(table1print, file=paste(output_dir,project_id,"_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
+  write.csv(table1print, file=paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
 
+  
   #Create Table of demographics with 4 predicted groups. 
   listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
   catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
-  table2_full <- CreateTableOne(vars = listVars2, data = filter(model_test_pheno,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
+  table2_full <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
   table2print<-print(table2_full,quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
-  write.csv(table2print, paste(output_dir,project_id,"_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  write.csv(table2print, paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  
+  #stargazer latex tables
+  table1sg<-stargazer(table1print[,1:5],summary=FALSE, rownames=T)
+  write.csv(table1sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
+  table2sg<-stargazer(table2print[,1:3],summary=FALSE, rownames=T)
+  write.csv(table2sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
 }
+
 
 ```
 
@@ -208,6 +219,9 @@ save(ml_models, file=paste(output_dir,"Classification_models.rdata",sep=""), com
 
 # PLotting
 ```{r Plotting of results}
+#load ML data
+load(file=paste(output_dir,"Classification_models.rdata",sep=""))
+
 
 ###########################Use classification_model_script_gap_and_impact.rmd
 
@@ -394,6 +408,7 @@ for (i in 1:length(modelnames)){
   model_strat_confuse_df<-create_table_df(testing_df,26,predict_train_fit)
   #plot tables
   table_fun_ml(model_strat_confuse_df,input_model_name)
+  
 }
 
 

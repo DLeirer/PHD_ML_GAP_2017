@@ -11,7 +11,8 @@ output:
 
 ##Install and load Libraries:
 ```{r Libraries, message=FALSE,warning=FALSE}
-
+rm(list = ls())
+dev.off()
 
 library(CellMix)
 library(lumi)
@@ -213,13 +214,16 @@ names(pData(eset_bg_log2_rsn_SVA_Good))
 save(eset_bg_log2_rsn_SVA_Good,file=paste(P0_output_dir,"GAP_FEP_small_Gene_Expression_Data.RData",sep=""))
 ```
 
-##Linear model to remove JUST Blood differences:
+##Linear model to remove covariate effect: done 2 times. Once to remove just blood, once to also consider ethncity, age, sex.
 ```{r, tidy=TRUE}
+
+
 #Input
 pData_rAESB<-pData(eset_bg_log2_rsn_SVA_Good)
 exprs_rAESB<-exprs(eset_bg_log2_rsn_SVA_Good)
 
 
+######################### JUST Blood differences#########################
 mod = model.matrix(~Tc+neutro,data=pData_rAESB)
 fit = lm.fit(mod,t(exprs_rAESB))
 #add residuals to average expression data
@@ -238,6 +242,34 @@ exprs(eset_linear_adj)<-exprs_into_lumibatch2
 
 #save
 save(eset_linear_adj,file=paste(P0_output_dir,"GAP_FEP_eset_linear_adj_Data.RData",sep=""))
+
+
+######################### Second Step: remove ethnicity, age, gender + tc + neutro #########################
+
+mod = model.matrix(~Tc+neutro+as.factor(Gender)+Age+as.factor(Ethnicity),data=pData_rAESB)
+fit = lm.fit(mod,t(exprs_rAESB))
+#add residuals to average expression data
+exprs_res_cor_adj<-t(fit$residuals)+apply(exprs_rAESB,1,mean)
+exprs_res_cor_adj[1:10,1:10]
+
+
+#make Lumibatch
+exprs_into_lumibatch_fadj<-exprs_res_cor_adj
+#check they are same order
+all.equal(rownames(fData(eset_bg_log2_rsn_SVA_Good)),rownames(exprs_into_lumibatch_fadj))
+#LUMIBATCH made
+eset_linear_full_adj<-eset_bg_log2_rsn_SVA_Good
+#Expression data put in
+exprs(eset_linear_full_adj)<-exprs_into_lumibatch_fadj
+
+#save
+save(eset_linear_full_adj,file=paste(P0_output_dir,"GAP_FEP_eset_linear_full_adj_Data.RData",sep=""))
+
+
+# check for equallity
+all.equal(exprs(eset_linear_full_adj),exprs(exprs_res_cor_adj)) ## should be true
+all.equal(exprs(eset_linear_full_adj),exprs(eset_linear_adj)) ## False. Some difference due to age ethnicity etc. 
+
 ```
 
 

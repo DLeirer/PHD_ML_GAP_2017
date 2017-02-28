@@ -208,8 +208,35 @@ names(reduced_probs_pheno)
 names(reduced_probs_pheno_prs[,c(2:11,1,12:81)])
 #Get everything in the right order
 reduced_probs_pheno_prs<-reduced_probs_pheno_prs[,c(2:11,1,12:81)]
+#second order (this is because I messed up a bit.)
+reduced_probs_pheno_prs_order<-reduced_probs_pheno_prs[,c(11:71,1,10,72:81)]
 
-pData(eset_bg_log2_rsn_SVA_Good)<-reduced_probs_pheno_prs[,c(11:71,1,10,72:81)]
+## add columns for Dataframe for later use.
+## Things to Change: PRS col names, ICD10 and DSMIV (control + collapse (2 extra columns),also change colnames),   
+names(reduced_probs_pheno_prs_order)
+head(reduced_probs_pheno_prs_order)
+
+## 1) change PRS colnames
+Prscolnames<-c("PRS_5e08", "PRS_1e05", "PRS_1e04", "PRS_0.001", "PRS_0.01", "PRS_0.05", "PRS_0.1", "PRS_0.2", "PRS_0.5", "PRS_1")
+colnames(reduced_probs_pheno_prs_order)[64:73]<-Prscolnames
+
+## 2.1) Change DSM and ICD10 colnames
+diagnosiscols<-c("dsmiv","icd10")
+colnames(reduced_probs_pheno_prs_order)[18:19]<-diagnosiscols
+
+## 2.2) add control to dsmiv and icd.
+
+reduced_probs_pheno_prs_order$Phenotype[reduced_probs_pheno_prs_order$Phenotype == "control"] <- "Control"
+reduced_probs_pheno_prs_order$dsmiv[reduced_probs_pheno_prs_order$Phenotype == "Control"] <- "Control"
+reduced_probs_pheno_prs_order$icd10[reduced_probs_pheno_prs_order$Phenotype == "Control"] <- "Control"
+
+reduced_pheno_final<-reduced_probs_pheno_prs_order %>% mutate(ICD_DSM=ifelse(dsmiv=="Schizophrenia" | icd10 == "Schizophrenia","Schizophrenia",
+                                                                ifelse(dsmiv =="Control", "Control", "Other_Psychosis")))
+
+
+         
+#########################################################
+pData(eset_bg_log2_rsn_SVA_Good)<-reduced_pheno_final
 names(pData(eset_bg_log2_rsn_SVA_Good))
 save(eset_bg_log2_rsn_SVA_Good,file=paste(P0_output_dir,"GAP_FEP_small_Gene_Expression_Data.RData",sep=""))
 ```
@@ -223,7 +250,7 @@ pData_rAESB<-pData(eset_bg_log2_rsn_SVA_Good)
 exprs_rAESB<-exprs(eset_bg_log2_rsn_SVA_Good)
 
 
-######################### JUST Blood differences#########################
+######################### First Step: JUST Blood differences#########################
 mod = model.matrix(~Tc+neutro,data=pData_rAESB)
 fit = lm.fit(mod,t(exprs_rAESB))
 #add residuals to average expression data

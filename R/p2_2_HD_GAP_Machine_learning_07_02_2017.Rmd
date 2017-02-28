@@ -380,10 +380,13 @@ save(High_Low_complexity_model_list, file=paste(output_dir,project_id,"_High_Low
 #Predictions
 predict_fit<-predict(RF_fit, newdata = testing_df)
 confusionMatrix(predict_fit, testing_df$Phenotype)
+predict_fit<-predict(RF_fit_simple, newdata = testing_df)
+confusionMatrix(predict_fit, testing_df$Phenotype)
 predict_fit<-predict(c50_fit, newdata = testing_df)
 confusionMatrix(predict_fit, testing_df$Phenotype)
 predict_fit<-predict(nb_fit, newdata = testing_df)
 confusionMatrix(predict_fit, testing_df$Phenotype)
+
 
 
 ```
@@ -392,11 +395,10 @@ confusionMatrix(predict_fit, testing_df$Phenotype)
 
 ## Check most important variables for models and plot tables
 ```{r}
-
 #Define models
-modellist_table<-list(RF_fit,c50_fit,nb_fit)
+modellist_table<-list(RF_fit,c50_fit,nb_fit,RF_fit_simple)
 #Define model names
-modelnames<-c("RF_fit","c50_fit","nb_fit")
+modelnames<-c("RF_fit","c50_fit","nb_fit","RF_fit_simple")
 #iterate over models to plot
 for (i in 1:length(modelnames)){
   #pick model and name  
@@ -414,14 +416,37 @@ for (i in 1:length(modelnames)){
 
 ```
 
+## Plot PRS vs Ethnicity
+```{r}
+
+title_final_models<-"Comparision of classification by PRS (RF simple Hypothesis Driven)"
+s_title="PRS_ethnicity_comparisions_RF_hypothesis_driven"
+ggplot(model_strat_confuse_df,
+       aes(x=ConfusionMatrix,y=Pol_1_GAP_all_strict_excl_WTCCC2,colour= Ethnicity)) +
+  geom_point() + 
+  ggtitle(title_final_models)
+ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_.png",sep=""))
+
+```
+
+
+
+
 
 
 ####################################################################################################
 ## UNFINISHED IDEAS
 ```{r}
 
-dim(model_test_pheno)
-FEP_data<-filter(model_test_pheno,Phenotype=="FEP")
+title_final_models<-"Comparision of classification by PRS (RF simple Hypothesis Driven)"
+s_title="PRS_ethnicity_comparisions_RF_hypothesis_driven"
+ggplot(model_strat_confuse_df,
+       aes(x=ConfusionMatrix,y=Pol_1_GAP_all_strict_excl_WTCCC2,colour= Ethnicity)) +
+  geom_point() + 
+  ggtitle(title_final_models)
+ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_.png",sep=""))
+
+
 
 
 SUMO3<-testing_df$SUMO3

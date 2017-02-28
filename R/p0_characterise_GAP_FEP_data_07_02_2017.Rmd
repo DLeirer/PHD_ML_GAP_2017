@@ -38,9 +38,25 @@ P0_figs_dir <-"./P0_Characterise/figs/"
 
 lumidata<-"GAP_FEP_eset_linear_adj_Data.RData"
 load(paste(P0_output_dir,lumidata,sep=""))
-
+lumidata_full<-"GAP_FEP_eset_linear_full_adj_Data.RData"
+load(paste(P0_output_dir,lumidata_full,sep=""))
 
 ```
+
+##Functions:
+```{r}
+
+## Table function 1 demographics
+table_dem_fun<-function(pdata,table_name,stratify,listVars,catVars){
+  table1 <- CreateTableOne(vars = listVars, data = pdata, factorVars = catVars,strata=c(stratify),includeNA = T)
+  table1print<-print(table1)
+  table1print<-table1print[,-length(names(data.frame(table1print)))]
+  write.csv(table1print, file=paste(P0_output_dir,"no_latex_",table_name,sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  write.csv(stargazer(table1print,summary=FALSE), file=paste(P0_output_dir,"latex_",table_name,sep=""),row.names=F,col.names = F,sep="")
+}
+
+```
+
 
 
 ##Demographics:
@@ -48,21 +64,41 @@ load(paste(P0_output_dir,lumidata,sep=""))
 str(phenodat)
 
 phenodat<-pData(eset_linear_adj)
+phenodat[65:73]<-scale(phenodat[65:73])
 
-#Table1: Demographics
+phenodat
+names(phenodat)
 
-listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(phenodat)[65:73])
-catVars <- c("Ethnicity","Tobacco")
-table1 <- CreateTableOne(vars = listVars, data = phenodat, factorVars = catVars,strata=c("Phenotype"),includeNA = T)
-table1print<-print(table1)
-write.table(table1print, file=paste(P0_output_dir,"Table_1_Demographics.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+#######Table1: Demographics
+##variables
+lVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(phenodat)[65:73])
+cVars <- c("Ethnicity","Tobacco")
+lVars2 <- c("Medication","dsmiv","icd10","ICD_DSM","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+cVars2 <- c("Medication","dsmiv","icd10","ICD_DSM")
 
 
-listVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
-catVars2 <- c("Medication","dsmiv.opcrit","icd10.opcrit")
-table2 <- CreateTableOne(vars = listVars2, data = filter(phenodat,Phenotype=="FEP"), factorVars = catVars2,includeNA = T)
-table2print<-print(table2)
-write.table(table2print, file=paste(P0_output_dir,"Table_2_Clinicalinformation.tsv",sep=""),row.names=T,quote=FALSE,sep = "\t")
+##table statified by case control
+stratVar <- "Phenotype" 
+table_name <-"Table_1_Demographics.csv"
+table_dem_fun(phenodat,table_name,stratVar,lVars,cVars)
+table_name <-"Table_2_Clinicalinformation.csv"
+table_dem_fun(phenodat,table_name,stratVar,lVars2,cVars2)
+
+##table statified by Diagnosis consensus.
+stratVar <- "ICD_DSM" 
+table_name <-"Table_1_SczCat_Demographics.csv"
+table_dem_fun(phenodat,table_name,stratVar,lVars,cVars)
+table_name <-"Table_2_SczCat_Clinicalinformation.csv"
+table_dem_fun(filter(phenodat,Phenotype=="FEP"),table_name,stratVar,lVars2,cVars2)
+
+##table statified by Diagnosis consensus.
+stratVar <- "ICD_DSM" 
+table_name <-"Table_1_SczCat_white_Demographics.csv"
+table_dem_fun(filter(phenodat,Ethnicity =="White"),table_name,stratVar,lVars,cVars)
+table_name <-"Table_2_SczCat_white_Clinicalinformation.csv"
+table_dem_fun(filter(phenodat,Phenotype=="FEP" & Ethnicity =="White"),table_name,stratVar,lVars2,cVars2)
+
+
 
 
 ```
@@ -140,7 +176,6 @@ ggplot(data = phenodat,
       ggtitle(title)
 ggsave(paste(P0_figs_dir,title,".png",sep=""))
 
-filter(phenodat,Medication!="CONTROL")
 #medication 
 title = "Medication for FEP patients"
 ggplot(data = filter(phenodat,Medication!="CONTROL"), 
@@ -152,10 +187,10 @@ ggsave(paste(P0_figs_dir,title,".png",sep=""))
 
 
 names(phenodat)
-#medication 
+#medication vs PRS
 title = "Medication vs PRS"
 ggplot(data = filter(phenodat,Medication!="CONTROL"), 
-      aes(x = Medication, y=Pol_0.05_GAP_all_strict_excl_WTCCC2  , colour = Medication)) +
+      aes(x = Medication, y=PRS_1  , colour = Medication)) +
       geom_point() + 
       geom_boxplot()+
       coord_flip()+
@@ -163,17 +198,30 @@ ggplot(data = filter(phenodat,Medication!="CONTROL"),
 ggsave(paste(P0_figs_dir,title,".png",sep=""))
 
 #medication vs PRS
-title = "Medication vs PRS"
-ggplot(data = filter(phenodat,Medication!="CONTROL"), 
-      aes(x = Medication, y=Pol_0.05_GAP_all_strict_excl_WTCCC2  , colour = Medication)) +
-      geom_point() + 
-      geom_boxplot()+
-      coord_flip()+
+title = "PRS vs Ethnicity"
+ggplot(data = phenodat, 
+      aes(x = Phenotype, y=PRS_1  , colour = Ethnicity)) +
+      geom_jitter() + 
       ggtitle(title)
 ggsave(paste(P0_figs_dir,title,".png",sep=""))
 
+#medication vs PRS
+title = "Medication vs Ethnicity"
+ggplot(data = filter(phenodat,Ethnicity=="White"), 
+      aes(x = , y=PRS  , colour = Ethnicity)) +
+      geom_jitter() +
+      geom_boxplot()+
+      ggtitle(title)
 
-
+#medication vs PRS
+title = "PRS vs Psychosis categories"
+ggplot(data = phenodat, 
+      aes(x = ICD_DSM, y=PRS_1  , colour = ICD_DSM)) +
+      geom_jitter() +
+      geom_boxplot()+
+      facet_wrap(~ Ethnicity)+
+      ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
 
 ```
 

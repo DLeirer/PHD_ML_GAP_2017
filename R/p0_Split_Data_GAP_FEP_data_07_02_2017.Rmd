@@ -85,6 +85,7 @@ set.seed(seed)
 #This is the data that had cell types regressed out.
 GX_lumi_object<-eset_linear_adj
 
+
 # remove duplicate probes and use gene symbols
 gene<- t(exprs(GX_lumi_object))
 probenames<-GX_lumi_object@featureData@data
@@ -106,6 +107,7 @@ names(pheno_data)
 GX_DF<-droplevels(merge(pheno_data,exprs_data, by.x="sampleID",by.y="row.names"))
 row.names(GX_DF)<-GX_DF[,1]
 GX_DF[1:10,1:10]
+GX_DF_adj<-GX_DF
 
 training_index <- createDataPartition(GX_DF$Phenotype, p = 0.70, list = F)
 
@@ -136,7 +138,7 @@ dim(exprs_data)
 
 # pheno data
 names(pData(GX_lumi_object))
-pheno_data<-pData(GX_lumi_object)[,c(6,9,62,11:19,74,21:24,1,65:73)]
+pheno_data<-pData(GX_lumi_object)[,c(1,6,9,11:19,74,21:24,64:73)]
 names(pheno_data)
 
 
@@ -146,6 +148,7 @@ set.seed(seed)
 GX_DF<-droplevels(merge(pheno_data,exprs_data, by.x="sampleID",by.y="row.names"))
 row.names(GX_DF)<-GX_DF[,1]
 GX_DF[1:10,1:10]
+GX_DF_full_adj<-GX_DF
 
 training_index <- createDataPartition(GX_DF$Phenotype, p = 0.70, list = F)
 
@@ -154,15 +157,13 @@ testing_df_full <- GX_DF[-training_index,]
 
 #Make tables
 split="testing_df_full"
-table_fun(testing_df_full,split,prs_col=(18:26))
+table_fun(testing_df_full,split,prs_col=(18:27))
 split="training_df_full"
-table_fun(training_df_full,split,prs_col=(18:26))
+table_fun(training_df_full,split,prs_col=(18:27))
 
 ###########################################################################
 #Save results
 save(training_df, testing_df,training_df_full, testing_df_full,file=paste(P0_output_dir,"Train_and_Test_data.Rdata",sep=""), compress = T)
-
-
-
+save(GX_DF_full_adj,file=paste(P0_output_dir,"GX_DF_full_adj_data.Rdata",sep=""), compress = T)
 
 ```

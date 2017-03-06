@@ -191,16 +191,14 @@ registerDoMC(cores = 8)
 seed = 7
 set.seed(seed)
 
-#Control for algorithms
+#Control for algorithms, Bootstrapping, 10k = 40 minutes 8 core.
 control <- trainControl(method="boot", number=10000, savePredictions="all") ## Steve added sampling argument. READ!!
 
 #Define Metric to choose best model
 metric <- "Accuracy"
 
 #Names of all predictors to be used. 
-opt_rfepredictors<-predictors(rfe_output)
 opt_rfepredictors<-final_hd_probes
-
 
 #input data frame
 expressionRFE<-GX_DF_full_adj[,c("Phenotype",opt_rfepredictors)]
@@ -216,7 +214,7 @@ glmnet_fit_b <- train(Phenotype~., data=expressionRFE, method="glmnet", metric=m
 glmnet_fit_b
 
 #Save Models
-save(glmnet_fit_b, file=paste(output_dir,"Classification_models.rdata",sep=""), compress = T)
+save(glmnet_fit_b, file=paste(output_dir,project_id,project_name,"Classification_model.rdata",sep=""), compress = T)
 
 ```
 
@@ -226,17 +224,30 @@ save(glmnet_fit_b, file=paste(output_dir,"Classification_models.rdata",sep=""), 
 ## Check most important variables for models and plot tables
 ```{r}
 
+glmvarimp<-varImp(glmnet_fit_b, scale = FALSE)
+glmvariables<-glmvarimp$importance
+glmvariables$Genes<-rownames(glmvariables)
+glmvariables<-filter(glmvariables,Overall !=0)
+glmvariables<-arrange(glmvariables,desc(Overall))
+write.table(glmvariables, file=paste(output_dir,project_id,project_name,"_glmnet_predictors.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+
+
+
 #pick model and name
 input_model=glmnet_fit_b
 input_model_name="glm"
 #use model to predict training data
 predict_fit<-predict.train(input_model, newdata = GX_DF_full_adj)
-confusionMatrix(predict_fit, GX_DF_full_adj$Phenotype)
+cmatrix<-confusionMatrix(predict_fit, GX_DF_full_adj$Phenotype)
+matrixout<-data.frame(c(cmatrix$overall,cmatrix$byClass))
+#save metrics
+write.table(t(matrixout), file=paste(output_dir,project_id,project_name,"glmnet_confusionout.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+
+
 #make dataframes
 model_strat_confuse_df<-create_table_df(GX_DF_full_adj,27,predict_fit)
 #plot tables
 table_fun_ml(model_strat_confuse_df,input_model_name)
-  
 
 
 ```

@@ -7,6 +7,12 @@ output:
     fig_height: 6
 ---
 
+TODO: 
+PRS - Adjust using Principle components. 
+Get Residuals.
+Center Scale. 
+Remove outliers. 
+
 #CellMix approach:
 
 ##Install and load Libraries:
@@ -301,3 +307,54 @@ all.equal(exprs(eset_linear_full_adj),exprs(eset_linear_adj)) ## False. Some dif
 
 
 
+```{r, tidy=TRUE}
+######################################### in construction
+
+#######Adjust using principle components?????
+##trying to adjust PRS> 
+phenodat2<-phenodat[complete.cases(phenodat$PRS_1),]
+phenodat2<-droplevels(phenodat2)
+
+
+phenodat2
+mod2 = model.matrix(~as.factor(Gender)+as.factor(Ethnicity),data=phenodat2)
+fit = lm.fit(mod2,as.matrix(phenodat2[64:73]))
+#add residuals to average expression data
+exprs_res_cor_adj<-t(fit$residuals)+apply(t(as.matrix(phenodat2[64:73])),1,mean)
+t(exprs_res_cor_adj)[1:10,1:10]
+phenodat2[1:10,64:73]
+phenodat2[64:73]<-t(exprs_res_cor_adj)
+phenodat2=filter(phenodat2,Ethnicity=="White")
+phenodat2[64:73]<-scale(phenodat2[64:73])
+table(phenodat2$PHENOTYPE)
+table(phenodat2$ICD_DSM)
+
+title = "PRS vs Psychosis categories"
+ggplot(phenodat2, aes(PRS_1,fill = ICD_DSM, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Ethnicity)+
+  ggtitle(title)
+
+
+
+names(phenodat2[64:73])
+dim(filter(phenodat2,PRS_0.1 < 2 & PRS_0.1 > -2))
+
+ggplot(data = filter(phenodat2,PRS_0.05 < 2.5 & PRS_0.05 > -2.5), 
+      aes(x = ICD_DSM, y=PRS_0.05  , colour = ICD_DSM)) +
+      geom_jitter() +
+      geom_boxplot()+
+      facet_wrap(~ Ethnicity)+
+      ggtitle(title)
+
+
+
+ggplot(data = filter(phenodat2,PRS_0.05 < 3 & PRS_0.05 > -3), aes(PRS_0.05,fill = Phenotype, colour = Phenotype))+
+  geom_density(alpha=0.01)+
+  #facet_wrap(~ Ethnicity)+
+  ggtitle(title)
+
+       
+       
+######################################### in construction end
+```

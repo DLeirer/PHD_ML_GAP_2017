@@ -115,13 +115,13 @@ table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
 top_dir<-getwd()
 data_dir <-"./P0_Characterise/output/"
 data_dir0 <-"./data/"
-output_dir <-"./P1_Hypothesis_Free/output/"
-figs_dir <-"./P1_Hypothesis_Free/figs/"
+output_dir <-"./P2_Hypothesis_Driven/p2_6_HD_boosting/output/"
+figs_dir <-"./P2_Hypothesis_Driven/p2_6_HD_boosting/figs/"
 
 
 #Pre and post fixes.
-project_name = "HF_boost"
-project_id = "p1_6"
+project_name = "HD_boost"
+project_id = "p2_6"
 
 ```
 

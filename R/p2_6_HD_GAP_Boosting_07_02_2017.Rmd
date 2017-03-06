@@ -115,6 +115,7 @@ table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
 top_dir<-getwd()
 data_dir <-"./P0_Characterise/output/"
 data_dir0 <-"./data/"
+gene_list_dir <-"./P2_Hypothesis_Driven/output/"
 output_dir <-"./P2_Hypothesis_Driven/p2_6_HD_boosting/output/"
 figs_dir <-"./P2_Hypothesis_Driven/p2_6_HD_boosting/figs/"
 
@@ -132,7 +133,52 @@ project_id = "p2_6"
 ```{r Load data}
 
 load(file=paste(data_dir,"GX_DF_full_adj_data.Rdata",sep=""))
+load(file=paste(gene_list_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
+Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
 
+```
+
+
+#Process Pirooznia gene lists
+```{r Load data}
+
+#table of genesets
+table(Genesets_HD$Eclass)
+#extract gene sets
+SCZ_comp<-filter(Genesets_HD, Eclass=="Scz-composite")
+PGC_SCZ<-filter(Genesets_HD, Eclass=="PGC_SCZ")
+PGC_BP<-filter(Genesets_HD, Eclass=="PGC_BP")
+PGC_MDD<-filter(Genesets_HD, Eclass=="PGC_MDD")
+
+#Check dimensions
+dim(SCZ_comp)
+dim(PGC_SCZ)
+dim(PGC_BP)
+dim(PGC_MDD)
+
+#Compare genesets
+table(PGC_SCZ[,1]%in%SCZ_comp[,1])
+table(PGC_BP[,1]%in%SCZ_comp[,1])
+table(PGC_MDD[,1]%in%SCZ_comp[,1])
+
+
+
+#GAP all probes.
+background_GAP<-colnames(GX_DF_full_adj)[-c(1:27)]
+length(background_GAP)
+table(background_GAP%in%Genesets_HD$Gene_names)
+table(background_GAP%in%SCZ_comp[,1])
+table(background_GAP%in%PGC_SCZ[,1])
+table(background_GAP%in%PGC_BP[,1])
+table(background_GAP%in%PGC_MDD[,1])
+
+#Hypothesis driven Probes
+final_hd_probes<-background_GAP[background_GAP%in%Genesets_HD$Gene_names]
+PGC_SCZ_hd_probes<-background_GAP[background_GAP%in%PGC_SCZ[,1]]
+
+#Check that there are no duplicates
+table(duplicated(final_hd_probes))
+table(duplicated(PGC_SCZ_hd_probes))
 
 ```
 
@@ -146,347 +192,52 @@ seed = 7
 set.seed(seed)
 
 #Control for algorithms
-control <- trainControl(method="boot", number=300, savePredictions="all") ## Steve added sampling argument. READ!!
+control <- trainControl(method="boot", number=10000, savePredictions="all") ## Steve added sampling argument. READ!!
 
 #Define Metric to choose best model
 metric <- "Accuracy"
 
 #Names of all predictors to be used. 
 opt_rfepredictors<-predictors(rfe_output)
+opt_rfepredictors<-final_hd_probes
+
 
 #input data frame
-expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
-expressionRFE<-training_df_full[,c("Phenotype",opt_rfepredictors)]
-training_df<-training_df_full
-testing_df<-testing_df_full
+expressionRFE<-GX_DF_full_adj[,c("Phenotype",opt_rfepredictors)]
 
 
 ```
 
 # Machine Learning
 ```{r feature selection}
-
-#Warning will use a lot of resources and take a long time. Output is a list of machine learning models. 
-ml_models<-ml_fun(expressionRFE)
-ml_models_full<-ml_fun(expressionRFE_full)
+#GLMNET MODEL
+set.seed(seed)
+glmnet_fit_b <- train(Phenotype~., data=expressionRFE, method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+glmnet_fit_b
 
 #Save Models
-save(ml_models, ml_models_full, file=paste(output_dir,"Classification_models.rdata",sep=""), compress = T)
+save(glmnet_fit_b, file=paste(output_dir,"Classification_models.rdata",sep=""), compress = T)
 
 ```
 
-
-
-# PLotting
-```{r Plotting of results}
-#load ML data
-load(file=paste(output_dir,"Classification_models.rdata",sep=""))
-
-
-###########################Use classification_model_script_gap_and_impact.rmd
-##### partial adjustment
-modellist<-ml_models
-output_dir <-"./P2_Hypothesis_Driven/output/"
-figs_dir <-"./P2_Hypothesis_Driven/figs/"
-
-
-##### Full adjustment
-modellist<-ml_models_full
-output_dir <-"./P2_Hypothesis_Driven/pheno_corrected/output/"
-figs_dir <-"./P2_Hypothesis_Driven/pheno_corrected/figs/"
-
-
-#extract accuracy Models
-ml_resample<-resamples(modellist)
-Acc_results<-ml_resample$values[,grep("*Accuracy",colnames(ml_resample$values))]
-
-## Plot 
-
-#single point
-Accuracy_results<-sapply(Acc_results,mean)
-accuracy_plot<-as.data.frame(Accuracy_results)
-accuracy_plot<-as.data.frame(Accuracy_results)
-accuracy_plot$Algorithm<-row.names(accuracy_plot)
-
-s_title="Dotplot_comparing"
-ggplot(accuracy_plot,
-  aes(x=Accuracy_results,y=Algorithm,color=Algorithm)) +
-  geom_point()+ 
-  ggtitle("Average accuracy of 10x10-fold cross validation for 11 Models")
-ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""))
-results<-ml_resample
-
-#all points
-Accuracy_results<-ml_resample$values[,grep("*Accuracy",colnames(ml_resample$values))]
-accuracy_plot<-Accuracy_results[,row.names(as.matrix(sort(sapply(Accuracy_results,mean),decreasing = F)))]
-accuracy_plot$Datasets<-c("RFE(GAP)")
-accuracy_plot2<-melt(accuracy_plot, id="Datasets")
-colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
-
-table(accuracy_plot2[,3])
-s_title="Dotplot_comparing_cv"
-ggplot(accuracy_plot2,
-  aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
-  geom_point() + 
-  geom_boxplot()+
-  coord_flip()+
-  ggtitle("Accuracy of 10x10-fold cross validation for 11 Models")
-ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""))
-
-
-```
-
-#Tuning of top models Random. 
-```{r Tuning}
-
-#change project id
-project_id = "p2_3"
-#Define tune parameters and depth (careful, this can be really ineffective for large numbers of hyperparameters.)
-tunecontrol <- trainControl(method="repeatedcv", number=10, repeats=5, sampling="down", savePredictions="all")
-tunelength <- 20
-
-#Run Parameter Search.
-set.seed(seed)
-RF_fit <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl=tunecontrol,tuneGrid=expand.grid(.mtry=(1:8))) 
-#RF_fit <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl=tunecontrol,tuneLength=tunelength) 
-set.seed(seed)
-nb_fit <-train(Phenotype~., data=expressionRFE, method="nb", metric=metric, tuneLength=tunelength, trControl=tunecontrol)
-set.seed(seed)
-c50_fit <-train(Phenotype~., data=expressionRFE, method="C5.0", metric=metric, tuneLength=tunelength, trControl=tunecontrol)
-
-
-
-
-#Plots
-s_title="RF_tuning"
-ggplot(RF_fit)+
-  ggtitle("Random Forrest Grid Search (Accuracy)")
-ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""))
-
-s_title="c50_tuning"
-ggplot(c50_fit)+
-  ggtitle("c50 Grid Search (Accuracy)")
-ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_Free.png",sep=""))
-
-
-```
-
-
-
-#Find low complexity model Here we look for a balance between complexity and accuracy. 
-```{r complexity vs accuracy}
-
-
-#####   Find least complex model within 1 percent of top performance
-simpleRF<-as.numeric(RF_fit$results[simple_model_fun(ml_model=RF_fit),][1,])
-
-#### Simplefy 
-set.seed(seed)
-RF_fit_simple <- train(Phenotype~., data=expressionRFE, method="rf", metric=metric, trControl=tunecontrol,tuneGrid=expand.grid(.mtry=(simpleRF[1]))) 
-
-
-#variable Importance
-importance <- varImp(RF_fit_simple, scale=FALSE)
-print(importance)
-t_title="RF_model_simple"
-write.table(print(importance$importance), file=paste(output_dir,project_id,"_",t_title,"_","varImp.csv",sep=""),row.names=T,quote=FALSE,sep = ",")
-
-```
-
-
-#Resample of top performers and top low complexity performers. 
-```{r complexity vs accuracy}
-High_Low_complexity_model_list<-list(RF_complex = RF_fit, RF_simple=RF_fit_simple,c50_complex=c50_fit,nb_fit=nb_fit)
-
-#Summary and Plot. 
-ml_resample<-resamples(High_Low_complexity_model_list)
-resamps=ml_resample
-
-```
-
-#Compare best models
-```{r Compare}
-str(resamps)
-#define names of models for plot
-Model_names<-c("RF_Complex","RF_Simple","c50_complex","nb_fit")
-#plot comparing models
-Accuracy_results<-resamps$values[,grep("*Accuracy",colnames(resamps$values))]
-colnames(Accuracy_results)<-Model_names
-accuracy_plot<-Accuracy_results[,row.names(as.matrix(sort(sapply(Accuracy_results,mean),decreasing = F)))]
-accuracy_plot$Datasets<-c("RFE(GAP)")
-accuracy_plot2<-melt(accuracy_plot, id="Datasets")
-colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
-
-
-title_final_models<-"Comparision of High and Low Complexity Models"
-s_title="Hi_Lo_complexity_model_comparision"
-ggplot(accuracy_plot2,
-       aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
-  geom_point() + 
-  geom_boxplot()+
-  geom_jitter()+
-  coord_flip()+
-  ggtitle(title_final_models)
-ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_.png",sep=""))
-
-
-```
-
-#Save all models for reference
-```{r save}
-
-
-#Save Models
-save(High_Low_complexity_model_list, file=paste(output_dir,project_id,"_High_Low_complexity_model_list.rdata",sep=""), compress = T)
-
-```
-
-
-
-#Validation
-```{r Validation}
-
-#Predictions
-predict_fit<-predict(RF_fit, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
-predict_fit<-predict(RF_fit_simple, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
-predict_fit<-predict(c50_fit, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
-predict_fit<-predict(nb_fit, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
-
-
-
-```
 
 
 
 ## Check most important variables for models and plot tables
 ```{r}
 
-#Define models
-modellist_table<-list(RF_fit,c50_fit,nb_fit,RF_fit_simple)
-#Define model names
-modelnames<-c("RF_fit","c50_fit","nb_fit","RF_fit_simple")
-#iterate over models to plot
-for (i in 1:length(modelnames)){
-  #pick model and name  
-  input_model=modellist_table[[i]]
-  input_model_name=modelnames[i]
-  #use model to predict training data
-  predict_train_fit<-predict.train(input_model, newdata = testing_df)
-  #make dataframes
-  model_strat_confuse_df<-create_table_df(testing_df,27,predict_train_fit)
-  #plot tables
-  table_fun_ml(model_strat_confuse_df,input_model_name)
+#pick model and name
+input_model=glmnet_fit_b
+input_model_name="glm"
+#use model to predict training data
+predict_fit<-predict.train(input_model, newdata = GX_DF_full_adj)
+confusionMatrix(predict_fit, GX_DF_full_adj$Phenotype)
+#make dataframes
+model_strat_confuse_df<-create_table_df(GX_DF_full_adj,27,predict_fit)
+#plot tables
+table_fun_ml(model_strat_confuse_df,input_model_name)
   
-}
 
 
 ```
 
-## Plot PRS vs Ethnicity
-```{r}
-
-title_final_models<-"Comparision of classification by PRS (RF simple Hypothesis Driven)"
-s_title="PRS_ethnicity_comparisions_RF_hypothesis_driven"
-ggplot(model_strat_confuse_df,
-       aes(x=ConfusionMatrix,y=PRS_1,colour= Ethnicity)) +
-  geom_point() + 
-  ggtitle(title_final_models)
-ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_.png",sep=""))
-
-```
-
-
-
-
-
-
-####################################################################################################
-## UNFINISHED IDEAS
-```{r}
-
-title_final_models<-"Comparision of classification by PRS (RF simple Hypothesis Driven)"
-s_title="PRS_ethnicity_comparisions_RF_hypothesis_driven"
-ggplot(model_strat_confuse_df,
-       aes(x=ConfusionMatrix,y=Pol_1_GAP_all_strict_excl_WTCCC2,colour= Ethnicity)) +
-  geom_point() + 
-  ggtitle(title_final_models)
-ggsave(paste(figs_dir,project_id,"_",s_title,"_",project_name,"_.png",sep=""))
-
-
-
-
-SUMO3<-testing_df$SUMO3
-
-FEP_data<-testing_df
-FEP_data<-merge(tpredictions,FEP_data,by.x="row.names",by.y="sampleID")
-
-
-
-
-FEP_data<-filter(FEP_data,Phenotype=="FEP")
-FEP_data<-filter(FEP_data,Phenotype=="FEP")
-FEP_data<-FEP_data[complete.cases(FEP_data$Pol_1_GAP_all_strict_excl_WTCCC2),]
-FEP_data[19:27]<-scale(FEP_data[19:27])
-corPRS_genes<-cor(FEP_data[,-c(1:26)], method = c("pearson"))
-
-?sort
-sort(corPRS_genes[1,],decreasing = T)["SUMO3"]
-
-
-library(WGCNA)
-#Pirooznia gene lists
-Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
-
-SCZ_comp<-filter(Genesets_HD, Eclass=="Scz-composite")
-PGC_SCZ<-filter(Genesets_HD, Eclass=="PGC_SCZ")
-PGC_BP<-filter(Genesets_HD, Eclass=="PGC_BP")
-PGC_MDD<-filter(Genesets_HD, Eclass=="PGC_MDD")
-
-#Compare genesets
-table(PGC_SCZ[,1]%in%SCZ_comp[,1])
-table(PGC_BP[,1]%in%SCZ_comp[,1])
-table(PGC_MDD[,1]%in%SCZ_comp[,1])
-
-#GAP all probes.
-background_GAP<-colnames(testing_df)[-c(1:26)]
-length(background_GAP)
-table(background_GAP%in%Genesets_HD$Gene_names)
-table(background_GAP%in%SCZ_comp[,1])
-table(background_GAP%in%PGC_SCZ[,1])
-table(background_GAP%in%PGC_BP[,1])
-table(background_GAP%in%PGC_MDD[,1])
-
-#Hypothesis driven Probes
-final_hd_probes<-background_GAP[background_GAP%in%Genesets_HD$Gene_names]
-
-
-psycho_genes<-as.data.frame(cbind(final_hd_probes,final_hd_probes))
-colnames(psycho_genes)<-c("final_hd_probes","Groups")
-psycho_genes$Groups <- final_hd_probes%in%opt_rfepredictors
-psycho_genes$Groups<-replace(psycho_genes$Groups, psycho_genes$Groups=="FALSE","background")
-psycho_genes$Groups<-replace(psycho_genes$Groups, psycho_genes$Groups=="TRUE","Psychosis")
-
-library(data.table)
-
-setwd(top_dir)
-setwd(data_dir0)
-enrichments = userListEnrichment(psycho_genes$final_hd_probes,psycho_genes$Groups,fnIn=c("GeneSetsMental_Pirooznia_2016.csv"),catNmIn=c("Pirooznia"),useBrainLists=F,useBrainRegionMarkers = F,useBloodAtlases = F,useImmunePathwayLists = F,minGenesInCategory = 5)
-#enrichments = userListEnrichment(all_probes$TargetID,all_probes$Groups,useBrainLists=T)
-setwd(top_dir)
-enpv<-enrichments$pValue
-enrichment_probes<-unlist(lapply(enrichments$ovGenes,paste, collapse =";"))
-enpv$Genes<-enrichment_probes
-enpv<-enpv[order(enpv$InputCategories,enpv$Pvalues),]
-enpvDT<-data.table(enpv)
-#enpvDT<-enpvDT[Pvalues < 0.05 & NumOverlap > 5,.SD[],by=InputCategories]
-##Select top 20, add pvalue < 0.05
-enpvDT<-enpvDT[,.SD[1:20],by=InputCategories]
-enpvDT
-
-write.csv(as.data.frame(enpvDT),file=paste(P3_output_dir,"Supplementary_Table_9_User_list_enrichment_diff_expression_results.csv",sep=""),row.names=F)
-
-```

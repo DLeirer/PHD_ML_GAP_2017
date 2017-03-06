@@ -115,12 +115,13 @@ table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
 top_dir<-getwd()
 data_dir <-"./P0_Characterise/output/"
 data_dir0 <-"./data/"
-output_dir <-"./P2_Hypothesis_Driven/output/"
-figs_dir <-"./P2_Hypothesis_Driven/figs/"
+output_dir <-"./P1_Hypothesis_Free/output/"
+figs_dir <-"./P1_Hypothesis_Free/figs/"
+
 
 #Pre and post fixes.
-project_name = "Hypothesis_Driven"
-project_id = "p2_2"
+project_name = "HF_boost"
+project_id = "p1_6"
 
 ```
 
@@ -130,7 +131,7 @@ project_id = "p2_2"
 #Load Data
 ```{r Load data}
 
-load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
+#load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
 load(file=paste(output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
 
@@ -146,7 +147,7 @@ seed = 7
 set.seed(seed)
 
 #Control for algorithms
-control <- trainControl(method="repeatedcv", number=10, repeats=10, sampling="down", savePredictions="all") ## Steve added sampling argument. READ!!
+control <- trainControl(method="boot", number=300, savePredictions="all") ## Steve added sampling argument. READ!!
 
 #Define Metric to choose best model
 metric <- "Accuracy"

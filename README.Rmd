@@ -101,8 +101,7 @@ LumiBatch object.
 + Find most important genes.  
 + Check for enrichment in core genes.  
 6. *p1_6_GAP_Boosting_07_02_2017.Rmd*  
-+ Find most important genes.  
-+ Check for enrichment in core genes.  
++ Use boosting.  
 
 
 
@@ -119,23 +118,22 @@ Differential Expression adjusting for Ethnciity Age and Gender using Limma.
 
 **Input:**  
 LumiBatch object.  
-.  
+
 
 **Script_Strategy:**    
   
-1. *p2_1_GAP_Feature_selection_07_02_2017.Rmd*
+1. *p2_1_HD_GAP_Feature_selection_07_02_2017.Rmd*
 + Feature Selection based on Purcell List.   
-2. *p2_2_GAP_Machine_learning_07_02_2017.Rmd*
+2. *p2_2_HD_Machine_learning_07_02_2017.Rmd*
 + Script that screens for best model.  
 + Script also plots
-3. *p2_3_GAP_Tuning_07_02_2017.Rmd*
 + Script that tunes best 3 models.  
 + Validate in test data.  
-4. *p2_4_GAP_Variables_test_07_02_2017.Rmd*  
 + Check classied samples by PANSS, sex, ethnicty, age, tobacco, ICD10, medication and PRS.  
-4. *p2_5_GAP_Enrichment_test_07_02_2017.Rmd*  
 + Find most important genes.  
 + Check for enrichment in core genes.  
+6. *p2_6_HD_Boosting_07_02_2017.Rmd*  
++ Use boosting.  
 
 
 

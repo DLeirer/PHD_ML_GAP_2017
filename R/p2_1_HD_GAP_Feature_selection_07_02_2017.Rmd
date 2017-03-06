@@ -92,10 +92,11 @@ table(background_GAP%in%PGC_MDD[,1])
 
 #Hypothesis driven Probes
 final_hd_probes<-background_GAP[background_GAP%in%Genesets_HD$Gene_names]
+PGC_SCZ_hd_probes<-background_GAP[background_GAP%in%PGC_SCZ[,1]]
 
 #Check that there are no duplicates
 table(duplicated(final_hd_probes))
-
+table(duplicated(PGC_SCZ_hd_probes))
 
 ```
 

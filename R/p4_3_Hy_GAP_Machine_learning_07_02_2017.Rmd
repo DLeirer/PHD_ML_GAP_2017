@@ -129,7 +129,7 @@ table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
   #Create Table of demographics with 4 predicted groups.
   listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco","ICD_DSM",names(mldata)[prs_col])
   catVars <- c("Ethnicity","Tobacco","ICD_DSM")
-  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
+  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("ml_data_predictions"),includeNA = T)
   table1print<-print(table1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
   write.csv(table1print, file=paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
 
@@ -137,14 +137,14 @@ table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
   #Create Table of demographics with 4 predicted groups. 
   listVars2 <- c("Medication","dsmiv","icd10","ICD_DSM","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
   catVars2 <- c("Medication","dsmiv","icd10","ICD_DSM")
-  table2_full <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
+  table2_full <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,strata=c("ml_data_predictions"),includeNA = T)
   table2print<-print(table2_full,quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
   write.csv(table2print, paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
-  
+}  
   #stargazer latex tables
-  table1sg<-stargazer(table1print[,1:5],summary=FALSE, rownames=T)
+  table1sg<-stargazer(table1print[,],summary=FALSE, rownames=T)
   write.csv(table1sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
-  table2sg<-stargazer(table2print[,1:3],summary=FALSE, rownames=T)
+  table2sg<-stargazer(table2print[,],summary=FALSE, rownames=T)
   write.csv(table2sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
 }
 
@@ -157,12 +157,13 @@ table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
 top_dir<-getwd()
 data_dir <-"./P0_Characterise/output/"
 data_dir0 <-"./data/"
-output_dir <-"./P2_Hypothesis_Driven/output/"
-figs_dir <-"./P2_Hypothesis_Driven/figs/"
+predictor_dir <-"./P2_Hypothesis_Driven/output/"
+output_dir <-"./P4_Hybrid_models/2_PRS_full_adj_gx_multicat/output/"
+figs_dir <-"./P4_Hybrid_models/2_PRS_full_adj_gx_multicat/figs/"
 
 #Pre and post fixes.
-project_name = "Hypothesis_Driven"
-project_id = "p2_2"
+project_name = "2_PRS_full_adj_gx_multicat"
+project_id = "p4_2"
 
 ```
 
@@ -173,7 +174,7 @@ project_id = "p2_2"
 ```{r Load data}
 
 load(paste(data_dir,"Train_and_Test_data.Rdata",sep=""))
-load(file=paste(output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
+load(file=paste(predictor_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
 
 ```
@@ -197,12 +198,18 @@ metric <- "Accuracy"
 opt_rfepredictors<-predictors(rfe_output)
 
 #input data frame
-expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
-expressionRFE<-training_df_full[,c("Phenotype",opt_rfepredictors)]
+#expressionRFE<-training_df[,c("Phenotype",opt_rfepredictors)]
+expressionRFE<-training_df_full[,c("ICD_DSM","PRS_1",opt_rfepredictors)]
 training_df<-training_df_full
+names(expressionRFE)[2]<-"PRS1"
+names(expressionRFE)[1]<-"Phenotype"
+expressionRFE<-expressionRFE[complete.cases(expressionRFE),]
 testing_df<-testing_df_full
+testing_df$PRS1<-testing_df$PRS_1
+testing_df<-testing_df[complete.cases(testing_df$PRS1),]
 
 
+names(testing_df)[1:40]
 ```
 
 # Machine Learning
@@ -210,11 +217,13 @@ testing_df<-testing_df_full
 
 #Warning will use a lot of resources and take a long time. Output is a list of machine learning models. 
 ml_models<-ml_fun(expressionRFE)
-ml_models_full<-ml_fun(expressionRFE_full)
+#ml_models_full<-ml_fun(expressionRFE_full)
+
+
 
 #Save Models
-save(ml_models, ml_models_full, file=paste(output_dir,"Classification_models.rdata",sep=""), compress = T)
-
+#save(ml_models, ml_models_full, file=paste(output_dir,"Classification_models.rdata",sep=""), compress = T)
+save(ml_models, file=paste(output_dir,"Classification_models.rdata",sep=""), compress = T)
 ```
 
 
@@ -224,19 +233,7 @@ save(ml_models, ml_models_full, file=paste(output_dir,"Classification_models.rda
 #load ML data
 load(file=paste(output_dir,"Classification_models.rdata",sep=""))
 
-
-###########################Use classification_model_script_gap_and_impact.rmd
-##### partial adjustment
 modellist<-ml_models
-output_dir <-"./P2_Hypothesis_Driven/output/"
-figs_dir <-"./P2_Hypothesis_Driven/figs/"
-
-
-##### Full adjustment
-modellist<-ml_models_full
-output_dir <-"./P2_Hypothesis_Driven/pheno_corrected/output/"
-figs_dir <-"./P2_Hypothesis_Driven/pheno_corrected/figs/"
-
 
 #extract accuracy Models
 ml_resample<-resamples(modellist)
@@ -390,13 +387,13 @@ save(High_Low_complexity_model_list, file=paste(output_dir,project_id,"_High_Low
 
 #Predictions
 predict_fit<-predict(RF_fit, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
+confusionMatrix(predict_fit, testing_df$ICD_DSM)
 predict_fit<-predict(RF_fit_simple, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
+confusionMatrix(predict_fit, testing_df$ICD_DSM)
 predict_fit<-predict(c50_fit, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
+confusionMatrix(predict_fit, testing_df$ICD_DSM)
 predict_fit<-predict(nb_fit, newdata = testing_df)
-confusionMatrix(predict_fit, testing_df$Phenotype)
+confusionMatrix(predict_fit, testing_df$ICD_DSM)
 
 
 

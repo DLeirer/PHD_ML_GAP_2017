@@ -36,8 +36,8 @@ P0_figs_dir <-"./P0_Characterise/figs/"
 ##Load gene expression data (Should be LumiBatch object):
 ```{r}
 
-lumidata<-"GAP_FEP_eset_linear_adj_Data.RData"
-load(paste(P0_output_dir,lumidata,sep=""))
+#lumidata<-"GAP_FEP_eset_linear_adj_Data.RData"
+#load(paste(P0_output_dir,lumidata,sep=""))
 lumidata_full<-"GAP_FEP_eset_linear_full_adj_Data.RData"
 load(paste(P0_output_dir,lumidata_full,sep=""))
 
@@ -63,8 +63,8 @@ table_dem_fun<-function(pdata,table_name,stratify,listVars,catVars){
 ```{r}
 str(phenodat)
 
-phenodat<-pData(eset_linear_adj)
-phenodat[65:73]<-scale(phenodat[65:73])
+phenodat<-pData(eset_linear_full_adj)
+phenodat[64:73]<-scale(phenodat[64:73])
 
 phenodat
 names(phenodat)
@@ -222,6 +222,16 @@ ggplot(data = phenodat,
       facet_wrap(~ Ethnicity)+
       ggtitle(title)
 ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
+
+#medication vs PRS
+title = "PRS vs Psychosis categories"
+ggplot(phenodat, aes(PRS_1,fill = ICD_DSM, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Ethnicity)+
+  ggtitle(title)
+ggsave(paste(P0_figs_dir,title,".png",sep=""))
+
 
 ```
 

@@ -60,23 +60,10 @@ table_fun<- function(mldata,split,prs_col=prs_col){
 #Load Data
 ```{r Load data}
 
-load(paste(P0_output_dir,"GAP_FEP_eset_linear_adj_Data.RData",sep=""))
+#load(paste(P0_output_dir,"GAP_FEP_eset_linear_adj_Data.RData",sep=""))
+load(paste(P0_output_dir,"GAP_FEP_eset_linear_full_adj_Data.RData",sep=""))
 
 
-GX_lumi_object<-eset_linear_adj
-
-# remove duplicate probes and use gene symbols
-gene<- t(exprs(GX_lumi_object))
-probenames<-GX_lumi_object@featureData@data
-colnames(gene) <- probenames$TargetID
-gene_expression_matrix<-t(gene)
-exprs_data<-gene
-dim(exprs_data)
-
-# pheno data
-names(pData(GX_lumi_object))
-pheno_data<-pData(GX_lumi_object)[,c(6,9,62,11:19,21:24,1,65:73)]
-names(pheno_data)
 ```
 
 #Define Cores and Seed
@@ -92,6 +79,26 @@ set.seed(seed)
 
 ##Split data
 ```{r}
+
+###########################################
+## Eset linear_adj split 
+#This is the data that had cell types regressed out.
+GX_lumi_object<-eset_linear_adj
+
+# remove duplicate probes and use gene symbols
+gene<- t(exprs(GX_lumi_object))
+probenames<-GX_lumi_object@featureData@data
+colnames(gene) <- probenames$TargetID
+gene_expression_matrix<-t(gene)
+exprs_data<-gene
+dim(exprs_data)
+
+# pheno data
+names(pData(GX_lumi_object))
+pheno_data<-pData(GX_lumi_object)[,c(6,9,62,11:19,74,21:24,1,65:73)]
+names(pheno_data)
+
+
 set.seed(seed)
 
 names(pheno_data)
@@ -112,7 +119,50 @@ split="training_df"
 table_fun(training_df,split,prs_col=(18:26))
 
 
+################################################
+## Eset linear_full_adj split 
+#This is the data that had cell types and ethnicity gender sex regressed out
+GX_lumi_object<-NULL
+GX_lumi_object<-eset_linear_full_adj
+
+
+# remove duplicate probes and use gene symbols
+gene<- t(exprs(GX_lumi_object))
+probenames<-GX_lumi_object@featureData@data
+colnames(gene) <- probenames$TargetID
+gene_expression_matrix<-t(gene)
+exprs_data<-gene
+dim(exprs_data)
+
+# pheno data
+names(pData(GX_lumi_object))
+pheno_data<-pData(GX_lumi_object)[,c(6,9,62,11:19,74,21:24,1,65:73)]
+names(pheno_data)
+
+
+set.seed(seed)
+
+#Add phenotype to Gene expression. 
+GX_DF<-droplevels(merge(pheno_data,exprs_data, by.x="sampleID",by.y="row.names"))
+row.names(GX_DF)<-GX_DF[,1]
+GX_DF[1:10,1:10]
+
+training_index <- createDataPartition(GX_DF$Phenotype, p = 0.70, list = F)
+
+training_df_full <- GX_DF[training_index,]
+testing_df_full <- GX_DF[-training_index,]
+
+#Make tables
+split="testing_df_full"
+table_fun(testing_df_full,split,prs_col=(18:26))
+split="training_df_full"
+table_fun(training_df_full,split,prs_col=(18:26))
+
+###########################################################################
 #Save results
-save(training_df, testing_df,file=paste(P0_output_dir,"Train_and_Test_data.Rdata",sep=""), compress = T)
+save(training_df, testing_df,training_df_full, testing_df_full,file=paste(P0_output_dir,"Train_and_Test_data.Rdata",sep=""), compress = T)
+
+
+
 
 ```

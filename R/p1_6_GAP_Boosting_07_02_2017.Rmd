@@ -181,6 +181,8 @@ save(glmnet_fit_b, file=paste(output_dir,project_id,project_name,"Classification
 ## Check most important variables for models and plot tables
 ```{r}
 
+glmnet_fit_b$results
+
 glmvarimp<-varImp(glmnet_fit_b, scale = FALSE)
 glmvariables<-glmvarimp$importance
 glmvariables$Genes<-rownames(glmvariables)

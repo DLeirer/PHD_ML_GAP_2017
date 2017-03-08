@@ -60,7 +60,7 @@ table_fun<- function(mldata,split,prs_col=prs_col){
 #Load Data
 ```{r Load data}
 
-#load(paste(P0_output_dir,"GAP_FEP_eset_linear_adj_Data.RData",sep=""))
+load(paste(P0_output_dir,"GAP_FEP_eset_linear_adj_Data.RData",sep=""))
 load(paste(P0_output_dir,"GAP_FEP_eset_linear_full_adj_Data.RData",sep=""))
 
 
@@ -96,7 +96,7 @@ dim(exprs_data)
 
 # pheno data
 names(pData(GX_lumi_object))
-pheno_data<-pData(GX_lumi_object)[,c(6,9,62,11:19,74,21:24,1,65:73)]
+pheno_data<-pData(GX_lumi_object)[,c(1,6,9,11:19,74,21:24,64:73)]
 names(pheno_data)
 
 
@@ -165,5 +165,10 @@ table_fun(training_df_full,split,prs_col=(18:27))
 #Save results
 save(training_df, testing_df,training_df_full, testing_df_full,file=paste(P0_output_dir,"Train_and_Test_data.Rdata",sep=""), compress = T)
 save(GX_DF_full_adj,file=paste(P0_output_dir,"GX_DF_full_adj_data.Rdata",sep=""), compress = T)
+save(GX_DF_adj,file=paste(P0_output_dir,"GX_DF_adj_data.Rdata",sep=""), compress = T)
+
+
+
+
 
 ```

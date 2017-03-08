@@ -221,6 +221,7 @@ glmnet_4_Dem <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmn
 #Save Models
 save(glmnet_4_Dem, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
 
+
 ##### Model 5
 ModelNum= 5
 set.seed(seed)
@@ -257,8 +258,10 @@ save(glmnet_8_Gx_d_prs, file=paste(output_dir,project_id,project_name,modelID[Mo
 
 ## Check most important variables for models and plot tables
 ```{r}
-load(file=paste(output_dir,project_id,project_name,"Classification_model.rdata",sep=""))
+#load(file=paste(output_dir,project_id,project_name,"Classification_model.rdata",sep=""))
 p1_glm<-glmnet_fit_b
+
+#Create loop to get Var imp and metrics
 
 
 glmvarimp<-varImp(glmnet_4_Dem, scale = FALSE)

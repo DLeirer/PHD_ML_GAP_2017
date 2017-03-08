@@ -46,7 +46,7 @@ P0_figs_dir <-"./P0_Characterise/figs/"
 lumidata<-"GAP_FEP_Full_Gene_Expression_Data_Linear.RData"
 load(paste(data_dir,lumidata,sep=""))
 PRS_data<-read.csv(paste(data_dir,"GAP_FEP_Polygenic_Risk_scores.csv",sep=""))
-
+PRS_eigenvalues_data<-read.csv(paste(data_dir,"GAP_eigenvectors.csv",sep=""),na.strings=c("#N/A"))
 
 ```
 

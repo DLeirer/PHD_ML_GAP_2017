@@ -133,7 +133,6 @@ project_id = "p1_6"
 
 load(file=paste(data_dir,"GX_DF_full_adj_data.Rdata",sep=""))
 
-
 ```
 
 #Configure
@@ -145,7 +144,7 @@ registerDoMC(cores = 8)
 seed = 7
 set.seed(seed)
 
-#Control for algorithms, Bootstrapping, 10k = ??? minutes 8 core.
+#Control for algorithms, Bootstrapping, 10k = ~3 hours 8 core.
 control <- trainControl(method="boot", number=10000, savePredictions="all") ## Steve added sampling argument. READ!!
 
 #Define Metric to choose best model
@@ -180,8 +179,10 @@ save(glmnet_fit_b, file=paste(output_dir,project_id,project_name,"Classification
 
 ## Check most important variables for models and plot tables
 ```{r}
+load(file=paste(output_dir,project_id,project_name,"Classification_model.rdata",sep=""))
+p1_glm<-glmnet_fit_b
 
-glmnet_fit_b$results
+
 
 glmvarimp<-varImp(glmnet_fit_b, scale = FALSE)
 glmvariables<-glmvarimp$importance

@@ -1,0 +1,319 @@
+---
+title: "Machine Learning"
+author: "DJL"
+date: "02/10/2016"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Overview
+
+**Aim**  
+Create Machine learning models using GAP data. 
+
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(plyr)
+library(dplyr)
+library(randomForest)
+library(lubridate)
+library(doMC)
+library(caret)
+library(reshape)
+library(tableone)
+library(stargazer)
+library(mice)
+```
+
+#Functions
+```{r define functions, tidy=TRUE}
+
+#heatmap plotting function
+heatmap_ml<- function(model="NA",x_ax="NA",x_title="NA", y_ax="NA",y_title="NA",color_metric="NA",h_title="NA",save_output="NA") {
+  model_data<-model$results
+  model_data[,x_ax]<-as.factor(model_data[,x_ax])
+  model_data[,y_ax]<-as.factor(model_data[,y_ax])
+  model_data_metric<-model_data[,color_metric]
+  print(str(model_data))
+  ggplot(data = model_data, aes_string(x=x_ax, y=y_ax, fill=color_metric))+
+    geom_tile(color = "white")+
+    scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
+      midpoint = mean(model_data_metric), limit = c(min(model_data_metric),max(model_data_metric)), space = "Lab", 
+      name="") +
+    theme_minimal()+ 
+    theme(axis.text.x = element_text(angle = 90, vjust = 1, 
+      size = 10, hjust = 1))+
+    coord_fixed()+
+    ggtitle(h_title) + xlab(x_title) + ylab(y_title)
+  ggsave(save_output)
+}
+
+#find simple model. 
+simple_model_fun<- function(ml_model,tol_percentage = 1, metric_sm=metric) {
+    tolerance(ml_model$results, metric = metric_sm, tol = tol_percentage, maximize = TRUE)    
+}
+
+#helper Function for creation stratified by confusionmatrix result data frame when making tables of enviroment vs classification 
+create_table_df<-function(input_data,use_columns,ml_data_predictions){
+  #create object to be used from now on. 
+  full_data<-input_data[,1:use_columns]
+  #add rownames to predictions
+  tpredictions<-data.frame(ml_data_predictions)
+  rownames(tpredictions)<-full_data$sampleID
+
+
+  #create test data with pheno predictions. 
+  model_test_pheno<-merge(tpredictions,full_data,by.x="row.names",by.y="sampleID")
+  ## Make confusion matrix column
+  model_test_pheno<-model_test_pheno %>% mutate(ConfusionMatrix=ifelse(Phenotype == "FEP" & ml_data_predictions=="Control","FEP_misclassed",
+                                            ifelse(Phenotype == "FEP" & ml_data_predictions=="FEP","FEP_true",
+                                            ifelse(Phenotype != "FEP" & ml_data_predictions=="FEP","Control_misclassified","Control_true"))))
+  # Center and Scale PRS
+  model_test_pheno[20:28]<-scale(model_test_pheno[20:28])
+  return (model_test_pheno)
+}
+
+
+# Function for making tables of confusion matrix stratified dataframes of ml models
+table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
+  #output name of model define
+  t_title=out_name_id
+  latex="_latex"
+  latex="_latex"
+  #Create Table of demographics with 4 predicted groups.
+  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco","ICD_DSM",names(mldata)[prs_col])
+  catVars <- c("Ethnicity","Tobacco","ICD_DSM")
+  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
+  table1print<-print(table1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+  write.csv(table1print, file=paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
+
+  
+  #Create Table of demographics with 4 predicted groups. 
+  listVars2 <- c("Medication","dsmiv","icd10","ICD_DSM","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+  catVars2 <- c("Medication","dsmiv","icd10","ICD_DSM")
+  table2_full <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
+  table2print<-print(table2_full,quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+  write.csv(table2print, paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  
+  #stargazer latex tables
+  table1sg<-stargazer(table1print[,1:5],summary=FALSE, rownames=T)
+  write.csv(table1sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
+  table2sg<-stargazer(table2print[,1:3],summary=FALSE, rownames=T)
+  write.csv(table2sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
+}
+
+
+```
+
+
+#Directories
+```{r Define directories}
+top_dir<-getwd()
+data_dir <-"./P0_Characterise/output/"
+data_dir0 <-"./data/"
+output_dir <-"./P11_glmnet_bootstrap/output/"
+figs_dir <-"./P11_glmnet_bootstrap/figs/"
+
+
+#Pre and post fixes.
+project_name = "glmnet_boot"
+project_id = "p11_"
+
+```
+
+
+
+
+#Load Data
+```{r Load data}
+
+load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
+Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
+```
+
+
+#Imputation (PRS + Tobacco) + Demographic factors
+```{r Load data}
+##### Fix Polygenic Risk Score
+
+
+
+#Factors of demographics
+fa_Gender <-as.factor(GX_DF_adj$Gender)
+fa_Ethnicity <-as.factor(GX_DF_adj$Ethnicity)
+fa_Tobacco <-as.factor(GX_DF_adj$Tobacco)
+#Model Matrix
+design = model.matrix(~0+fa_Gender+fa_Ethnicity)  
+
+#Define all 8 models with predictors 
+Gx <-GX_DF_adj[,-c(1:3,5:27)]
+Gx_Scz<-Gx[,c("Phenotype",names(GX_DF_adj)[names(GX_DF_adj)%in%Genesets_HD$Gene_names])]
+PRS<-GX_DF_adj[,c(4,24)]  
+Demographics<-cbind(GX_DF_adj[,c(4,6)],design[,1:5])
+PRS_Demo<-cbind(GX_DF_adj[,c(4,6,24)],design[,1:5])
+Gx_PRS <- cbind(PRS,GX_DF_adj[,-c(1:27)])
+Gx_Demo <- cbind(Demographics,GX_DF_adj[,-c(1:27)])
+Gx_Demo_PRS <- cbind(PRS_Demo,GX_DF_adj[,-c(1:27)])
+
+#list of all model predictors
+predictorlists<-list(Gx,Gx_Scz,PRS,Demographics,PRS_Demo,Gx_PRS,Gx_Demo,Gx_Demo_PRS)
+
+#vector of model ids
+modelID<-c("1_Gx","2_Gx_Scz","3_PRS","4_Demographics","5_PRS_Demo","6_Gx_PRS","7_Gx_Demo","8_Gx_Demo_PRS")
+
+
+```
+
+
+
+#Configure
+```{r Define Cores and Seed}
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+#Control for algorithms, Bootstrapping, 10k = ~3 hours 8 cores 5k predictors 280 samples.
+control <- trainControl(method="boot", number=10000, savePredictions="all") ## Steve added sampling argument. READ!!
+
+#Define Metric to choose best model
+metric <- "Accuracy"
+
+```
+
+
+# Machine Learning
+```{r Ml}
+#GLMNET MODELS
+
+##### Model 1
+ModelNum=1
+set.seed(seed)
+glmnet_1_Gx <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_1_Gx, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 2
+#ModelNum=2
+#set.seed(seed)
+#glmnet_2_GxS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+#save(glmnet_2_GxS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 3
+ModelNum=3
+set.seed(seed)
+glmnet_3_PRS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_3_PRS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 4
+ModelNum=4
+set.seed(seed)
+glmnet_4_Dem <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_4_Dem, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 5
+ModelNum= 5
+set.seed(seed)
+glmnet_5_PrsD <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_5_PrsD, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 6
+ModelNum=6
+set.seed(seed)
+glmnet_6_Gx_PRS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_6_Gx_PRS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 7
+ModelNum=7
+set.seed(seed)
+glmnet_7_Gx_dem <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_7_Gx_dem, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 8
+ModelNum=8
+set.seed(seed)
+glmnet_8_Gx_d_prs <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_8_Gx_d_prs, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+
+```
+
+
+
+
+## Check most important variables for models and plot tables
+```{r}
+load(file=paste(output_dir,project_id,project_name,"Classification_model.rdata",sep=""))
+p1_glm<-glmnet_fit_b
+
+
+glmvarimp<-varImp(glmnet_4_Dem, scale = FALSE)
+glmvarimp<-varImp(glmnet_fit_b, scale = FALSE)
+glmvariables<-glmvarimp$importance
+glmvariables$Genes<-rownames(glmvariables)
+glmvariables<-filter(glmvariables,Overall !=0)
+glmvariables<-arrange(glmvariables,desc(Overall))
+write.table(glmvariables, file=paste(output_dir,project_id,project_name,"_glmnet_predictors.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+
+
+
+#pick model and name
+input_model=glmnet_fit_b
+input_model_name="glm"
+#use model to predict training data
+predict_fit<-predict.train(input_model, newdata = GX_DF_full_adj)
+cmatrix<-confusionMatrix(predict_fit, GX_DF_full_adj$Phenotype)
+matrixout<-data.frame(c(cmatrix$overall,cmatrix$byClass))
+#save metrics
+write.table(t(matrixout), file=paste(output_dir,project_id,project_name,"glmnet_confusionout.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+
+
+#make dataframes
+model_strat_confuse_df<-create_table_df(GX_DF_full_adj,27,predict_fit)
+#plot tables
+table_fun_ml(model_strat_confuse_df,input_model_name)
+
+
+```
+
+
+
+## Under Construction ##########################################################################################
+```{r}
+###################################################################################
+## Under Construction
+
+
+#modellist<- list(HF_glm=p1_glm,HD_glm=p2_glm)
+
+#p1data<-p1_glm$pred
+#str(p1_glm$pred)
+#table(p1data$lambda)
+
+#p1filter<-filter(p1data,alpha== 0.1)
+#p1filter<-filter(p1filter,lambda < 0.0105)
+dim(p1filter)
+table(p1filter$rowIndex)
+
+smallp1<-p1filter[!duplicated(p1filter$rowIndex),]
+dim(smallp1)
+smallsort<-arrange(smallp1,rowIndex)
+
+cbind(smallsort[,1:3],expressionRFE$Phenotype)
+
+
+```

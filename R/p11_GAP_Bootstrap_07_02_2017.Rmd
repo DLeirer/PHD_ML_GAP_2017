@@ -134,28 +134,92 @@ project_id = "p11_"
 
 load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
 Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
+
 ```
 
 
 #Imputation (PRS + Tobacco) + Demographic factors
 ```{r Load data}
 ##### Fix Polygenic Risk Score
-
-
+#Set Seed
+seed = 7
+set.seed(seed)
 
 #Factors of demographics
+fa_ICD_DSM<-GX_DF_adj$ICD_DSM
+fa_ICD_DSM[is.na(fa_ICD_DSM)]<- "Other_Psychosis"
+GX_DF_adj$ICD_DSM<-fa_ICD_DSM
+fa_Pheno <-as.factor(GX_DF_adj$Phenotype)
 fa_Gender <-as.factor(GX_DF_adj$Gender)
 fa_Ethnicity <-as.factor(GX_DF_adj$Ethnicity)
 fa_Tobacco <-as.factor(GX_DF_adj$Tobacco)
 #Model Matrix
-design = model.matrix(~0+fa_Gender+fa_Ethnicity)  
+design = model.matrix(~fa_Gender+fa_Ethnicity)  
+
+###########################################################################################################
+#1 Replace NA with otherpsychosis
+#Give mean startified by ICD_DSM + Ethnicity
+#knnImpute, bagImpute, medianImpute, 
+#ModelNum=5
+names(GX_DF_adj[,1:27])
+#design = model.matrix(~fa_Pheno+fa_Ethnicity+fa_ICD_DSM)  
+imputedesign = model.matrix(~fa_ICD_DSM+fa_Ethnicity)  
+
+
+PRS_full_impute<-cbind(GX_DF_adj[,c("Phenotype","Ethnicity","ICD_DSM","PRS_0.1","sampleID")],imputedesign[,2:6])
+#PRS_full_impute<-cbind(GX_DF_adj[,c("Phenotype","Ethnicity","PRS_0.1")],design[,2:6])
+#PRS_full_impute$Phenotype<-as.factor(PRS_full_impute$Phenotype)
+set.seed(seed)
+ImputePCA<-preProcess(PRS_full_impute,method= c("knnImpute"))
+PRS_NAs<-PRS_full_impute[is.na(PRS_full_impute$PRS_0.1),]
+
+
+#resultspred<-cbind(predict(ImputePCA, PRS_NAs)[4],PRS_NAs[c(1:3,5)])
+resultspred<-cbind(predict(ImputePCA, PRS_full_impute)[4],PRS_full_impute[c(1:3,5)])
+
+all.equal(GX_DF_adj$sampleID[c(2:280,1)],resultspred$sampleID[c(2:280,1)])
+GX_DF_adj$PRS_0.1<-resultspred$PRS_0.1
+
+#medication vs PRS
+title = "PRS vs Psychosis categories"
+ggplot(resultspred, aes(PRS_0.1,fill = Phenotype, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Ethnicity)+
+  ggtitle(title)
+#ggsave(paste(P0_figs_dir,title,".png",sep=""))
+title = "PRS vs Psychosis categories"
+ggplot(data = resultspred, 
+       aes(x = ICD_DSM, y=PRS_0.1  , colour = ICD_DSM)) +
+  geom_jitter() +
+  geom_boxplot()+
+  facet_wrap(~ Ethnicity)+
+  ggtitle(title)
+
+#medication vs PRS
+title = "PRS vs Psychosis categories"
+ggplot(GX_DF_adj, aes(PRS_0.1,fill = Phenotype, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Ethnicity)+
+  ggtitle(title)
+#ggsave(paste(P0_figs_dir,title,".png",sep=""))
+title = "PRS vs Psychosis categories"
+ggplot(data = GX_DF_adj, 
+       aes(x = ICD_DSM, y=PRS_0.1  , colour = ICD_DSM)) +
+  geom_jitter() +
+  geom_boxplot()+
+  facet_wrap(~ Ethnicity)+
+  ggtitle(title)
+
+
+###########################################################################################################
+
 
 #Define all 8 models with predictors 
 Gx <-GX_DF_adj[,-c(1:3,5:27)]
 Gx_Scz<-Gx[,c("Phenotype",names(GX_DF_adj)[names(GX_DF_adj)%in%Genesets_HD$Gene_names])]
 PRS<-GX_DF_adj[,c(4,24)]  
-Demographics<-cbind(GX_DF_adj[,c(4,6)],design[,1:5])
-PRS_Demo<-cbind(GX_DF_adj[,c(4,6,24)],design[,1:5])
+Demographics<-cbind(GX_DF_adj[,c(4,6)],design[,2:5])
+PRS_Demo<-cbind(GX_DF_adj[,c(4,6,24)],design[,2:5])
 Gx_PRS <- cbind(PRS,GX_DF_adj[,-c(1:27)])
 Gx_Demo <- cbind(Demographics,GX_DF_adj[,-c(1:27)])
 Gx_Demo_PRS <- cbind(PRS_Demo,GX_DF_adj[,-c(1:27)])
@@ -176,13 +240,11 @@ modelID<-c("1_Gx","2_Gx_Scz","3_PRS","4_Demographics","5_PRS_Demo","6_Gx_PRS","7
 
 #Allow 8 Cores
 registerDoMC(cores = 8) 
-#Set Seed
-seed = 7
-set.seed(seed)
 
+set.seed(seed)
 #Control for algorithms, Bootstrapping, 10k = ~3 hours 8 cores 5k predictors 280 samples.
 control <- trainControl(method="boot", number=10000, savePredictions="all") ## Steve added sampling argument. READ!!
-
+#control <- trainControl(method="cv", number=3, savePredictions="all",returnResamp = "all",verboseIter = T, returnData = TRUE) ## Steve added sampling argument. READ!!
 #Define Metric to choose best model
 metric <- "Accuracy"
 
@@ -210,7 +272,7 @@ save(glmnet_1_Gx, file=paste(output_dir,project_id,project_name,modelID[ModelNum
 ##### Model 3
 ModelNum=3
 set.seed(seed)
-glmnet_3_PRS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+glmnet_3_PRS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glm", metric=metric, preProc=c("center", "scale"), trControl=control) 
 #Save Models
 save(glmnet_3_PRS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
 
@@ -264,13 +326,15 @@ p1_glm<-glmnet_fit_b
 #Create loop to get Var imp and metrics
 
 
-glmvarimp<-varImp(glmnet_4_Dem, scale = FALSE)
-glmvarimp<-varImp(glmnet_fit_b, scale = FALSE)
+glmvarimp<-varImp(glmnet_8_Gx_d_prs, scale = FALSE)
+glmvarimp<-varImp(glmnet_5_PrsD, scale = FALSE)
+glmvarimp<-varImp(glmnet_6_Gx_PRS, scale = FALSE)
 glmvariables<-glmvarimp$importance
 glmvariables$Genes<-rownames(glmvariables)
 glmvariables<-filter(glmvariables,Overall !=0)
 glmvariables<-arrange(glmvariables,desc(Overall))
-write.table(glmvariables, file=paste(output_dir,project_id,project_name,"_glmnet_predictors.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+glmvariables
+#write.table(glmvariables, file=paste(output_dir,project_id,project_name,"_glmnet_predictors.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
 
 
 

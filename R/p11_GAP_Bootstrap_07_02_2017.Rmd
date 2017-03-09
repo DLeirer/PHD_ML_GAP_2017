@@ -156,64 +156,48 @@ fa_Tobacco <-as.factor(GX_DF_adj$Tobacco)
 #Model Matrix
 design = model.matrix(~fa_Gender+fa_Ethnicity)  
 
-###########################################################################################################
-#1 Replace NA with otherpsychosis
-#Give mean startified by ICD_DSM + Ethnicity
-#knnImpute, bagImpute, medianImpute, 
-#ModelNum=5
-names(GX_DF_adj[,1:27])
-#design = model.matrix(~fa_Pheno+fa_Ethnicity+fa_ICD_DSM)  
-imputedesign = model.matrix(~fa_ICD_DSM+fa_Ethnicity)  
+#####Impute PRS
+imputedesign = model.matrix(~fa_ICD_DSM+fa_Ethnicity)  #imputation factors
 
-
+#create dataframe for input into impute
 PRS_full_impute<-cbind(GX_DF_adj[,c("Phenotype","Ethnicity","ICD_DSM","PRS_0.1","sampleID")],imputedesign[,2:6])
-#PRS_full_impute<-cbind(GX_DF_adj[,c("Phenotype","Ethnicity","PRS_0.1")],design[,2:6])
-#PRS_full_impute$Phenotype<-as.factor(PRS_full_impute$Phenotype)
+
+#Impute with KNN using preprocess.
 set.seed(seed)
 ImputePCA<-preProcess(PRS_full_impute,method= c("knnImpute"))
+
+#Get NAs
 PRS_NAs<-PRS_full_impute[is.na(PRS_full_impute$PRS_0.1),]
 
-
-#resultspred<-cbind(predict(ImputePCA, PRS_NAs)[4],PRS_NAs[c(1:3,5)])
+#Predict 
 resultspred<-cbind(predict(ImputePCA, PRS_full_impute)[4],PRS_full_impute[c(1:3,5)])
 
+#Check all equal
 all.equal(GX_DF_adj$sampleID[c(2:280,1)],resultspred$sampleID[c(2:280,1)])
+
+#Prs back in original DF
 GX_DF_adj$PRS_0.1<-resultspred$PRS_0.1
 
-#medication vs PRS
-title = "PRS vs Psychosis categories"
-ggplot(resultspred, aes(PRS_0.1,fill = Phenotype, colour = Phenotype)) +
-  geom_density(alpha=0.01)+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-#ggsave(paste(P0_figs_dir,title,".png",sep=""))
-title = "PRS vs Psychosis categories"
+resultsNA<-resultspred[resultspred$sampleID%in%PRS_NAs$sampleID,]
+resultspred$Imputed<-ifelse(resultspred$sampleID%in%PRS_NAs$sampleID,"Imputed", "Real")
+
+#Make Plots
+#imputed  vs PRS
+title = "PRS_imputed_vs_real"
 ggplot(data = resultspred, 
-       aes(x = ICD_DSM, y=PRS_0.1  , colour = ICD_DSM)) +
+       aes(x = ICD_DSM, y=PRS_0.1  , colour = Imputed)) +
   geom_jitter() +
   geom_boxplot()+
   facet_wrap(~ Ethnicity)+
   ggtitle(title)
-
-#medication vs PRS
-title = "PRS vs Psychosis categories"
-ggplot(GX_DF_adj, aes(PRS_0.1,fill = Phenotype, colour = Phenotype)) +
-  geom_density(alpha=0.01)+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-#ggsave(paste(P0_figs_dir,title,".png",sep=""))
-title = "PRS vs Psychosis categories"
-ggplot(data = GX_DF_adj, 
-       aes(x = ICD_DSM, y=PRS_0.1  , colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,title,".png",sep=""))
 
 
-###########################################################################################################
+```
 
 
+####Define all 8 models with predictors 
+```{r Create input dataframes for models}
 #Define all 8 models with predictors 
 Gx <-GX_DF_adj[,-c(1:3,5:27)]
 Gx_Scz<-Gx[,c("Phenotype",names(GX_DF_adj)[names(GX_DF_adj)%in%Genesets_HD$Gene_names])]
@@ -244,7 +228,8 @@ registerDoMC(cores = 8)
 set.seed(seed)
 #Control for algorithms, Bootstrapping, 10k = ~3 hours 8 cores 5k predictors 280 samples.
 control <- trainControl(method="boot", number=10000, savePredictions="all") ## Steve added sampling argument. READ!!
-#control <- trainControl(method="cv", number=3, savePredictions="all",returnResamp = "all",verboseIter = T, returnData = TRUE) ## Steve added sampling argument. READ!!
+
+
 #Define Metric to choose best model
 metric <- "Accuracy"
 

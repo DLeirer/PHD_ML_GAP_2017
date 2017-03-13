@@ -389,7 +389,7 @@ for (pMetric in use_metrics){
     geom_boxplot(notch=T)+
     coord_flip()+
     ggtitle(title)
-  ggsave(paste(figs_dir,title,".png",sep=""))
+  ggsave(paste(figs_dir,project_id,project_name,"_",pMetric,"_boxplot.png",sep=""))
 }
 
 

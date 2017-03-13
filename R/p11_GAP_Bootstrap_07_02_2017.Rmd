@@ -306,7 +306,7 @@ for (ModelNum in 1:8){
 
 
 ##### Make list of all and save
-glmnet_models<-list(glmnet_1_Gx,glmnet_2_GxS,glmnet_3_PRS,glmnet_4_Dem,glmnet_5_PrsD,glmnet_6_Gx_PRS,glmnet_7_Gx_dem,glmnet_8_Gx_d_prs)
+glmnet_models<-list(Gx = glmnet_1_Gx, Gx_Scz = glmnet_2_GxS, PRS = glmnet_3_PRS, Dem = glmnet_4_Dem, PRS_Dem = glmnet_5_PrsD, Gx_PRS = glmnet_6_Gx_PRS,  Gx_Dem = glmnet_7_Gx_dem,  Gx_Dem_PRS = glmnet_8_Gx_d_prs)
 save(glmnet_models, file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""), compress = T)
 
 ```
@@ -318,21 +318,65 @@ save(glmnet_models, file=paste(output_dir,project_id,project_name,"_all_models",
 ```{r}
 load(file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""))
 
-p1_glm<-glmnet_fit_b
+
 
 #Create loop to get Var imp and metrics
+#Define List
+glm_var_list<-NULL
+#loop through models
+for (ModelNum in 1:8){
+  model_name<-modelID[ModelNum]
+  glmvarimp<-varImp(  glmnet_models[[ModelNum]], scale = FALSE)
+  glmvariables<-glmvarimp$importance
+  glmvariables$Variables<-rownames(glmvariables)
+  glmvariables$Model<-model_name
+  glmvariables<-filter(glmvariables,Overall !=0)
+  glmvariables<-arrange(glmvariables,desc(Overall))
+  #colnames(glmvariables)<-c(model_name,"Variable")
+  glm_var_list <- rbind(glm_var_list,glmvariables)
+}
+glm_var_list
+
+write.csv(glm_var_list, file=paste(output_dir,project_id,project_name,"_glmnet_all_mod_predictors.csv",sep=""),row.names=F,quote=FALSE)
+
+#Create loop to get Var imp and metrics
+#Define List
 
 
-glmvarimp<-varImp(glmnet_8_Gx_d_prs, scale = FALSE)
-glmvarimp<-varImp(glmnet_5_PrsD, scale = FALSE)
-glmvarimp<-varImp(glmnet_6_Gx_PRS, scale = FALSE)
-glmvariables<-glmvarimp$importance
-glmvariables$Genes<-rownames(glmvariables)
-glmvariables<-filter(glmvariables,Overall !=0)
-glmvariables<-arrange(glmvariables,desc(Overall))
-glmvariables
-#write.table(glmvariables, file=paste(output_dir,project_id,project_name,"_glmnet_predictors.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+str(ml_resample)
+str(accuracy_plot)
 
+
+
+ml_resample<-resamples(glmnet_models)
+
+pMetric="Accuracy"
+pMetric="Kappa"
+Metric_grep = paste("*",pMetric,sep="")
+
+#all points do this for Accuracy and Kappa
+metric_results<-ml_resample$values[,grep(Metric_grep,colnames(ml_resample$values))]
+names(metric_results)
+
+
+# Change model names. BE CAREFUL HERE!!!! THIS IS BASED ON ON A PREDEFINED LIST. IF YOU ARE UNSURE SWITCH TO THE FIRS LINE BELOW!!!!!
+#names(Accuracy_results)<-unlist(strsplit(x=names(Accuracy_results), split=".Accuracy",)) #use this if unsure. 
+names(metric_results)<-modelID # modelID !!!! BE CAREFUL !!!!
+
+metric_plot<-metric_results[,row.names(as.matrix(sort(sapply(metric_results,mean),decreasing = F)))]
+metric_plot$Datasets<-c("Glmnet_GAP")
+metric_plot2<-melt(metric_plot, id="Datasets")
+colnames(metric_plot2)<-c("GeneLists","Model",pMetric)
+str(metric_plot2)
+
+title=paste(pMetric, "of 10k Bootstrap Glmnet Models in GAP",sep=" ")
+ggplot(metric_plot2,
+  aes_string(x="Model",y=pMetric, colour = "Model")) +
+  #geom_point() + 
+  geom_boxplot(notch=T)+
+  coord_flip()+
+  ggtitle(title)
+ggsave(paste(figs_dir,title,".png",sep=""))
 
 
 #pick model and name

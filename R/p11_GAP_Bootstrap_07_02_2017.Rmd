@@ -339,46 +339,69 @@ glm_var_list
 
 write.csv(glm_var_list, file=paste(output_dir,project_id,project_name,"_glmnet_all_mod_predictors.csv",sep=""),row.names=F,quote=FALSE)
 
-#Create loop to get Var imp and metrics
-#Define List
-
-
-str(ml_resample)
-str(accuracy_plot)
-
-
-
+##Create loop to get metrics
+#Resamples
 ml_resample<-resamples(glmnet_models)
 
-pMetric="Accuracy"
-pMetric="Kappa"
-Metric_grep = paste("*",pMetric,sep="")
-
-#all points do this for Accuracy and Kappa
-metric_results<-ml_resample$values[,grep(Metric_grep,colnames(ml_resample$values))]
-names(metric_results)
-
-
-# Change model names. BE CAREFUL HERE!!!! THIS IS BASED ON ON A PREDEFINED LIST. IF YOU ARE UNSURE SWITCH TO THE FIRS LINE BELOW!!!!!
-#names(Accuracy_results)<-unlist(strsplit(x=names(Accuracy_results), split=".Accuracy",)) #use this if unsure. 
-names(metric_results)<-modelID # modelID !!!! BE CAREFUL !!!!
-
-metric_plot<-metric_results[,row.names(as.matrix(sort(sapply(metric_results,mean),decreasing = F)))]
-metric_plot$Datasets<-c("Glmnet_GAP")
-metric_plot2<-melt(metric_plot, id="Datasets")
-colnames(metric_plot2)<-c("GeneLists","Model",pMetric)
-str(metric_plot2)
-
-title=paste(pMetric, "of 10k Bootstrap Glmnet Models in GAP",sep=" ")
-ggplot(metric_plot2,
-  aes_string(x="Model",y=pMetric, colour = "Model")) +
-  #geom_point() + 
-  geom_boxplot(notch=T)+
-  coord_flip()+
-  ggtitle(title)
-ggsave(paste(figs_dir,title,".png",sep=""))
+#Save Mean for final models
+ml_resample_means<-sapply(ml_resample$values[,-1],mean)
+Accuracy_index<-grep("*Accuracy",names(ml_resample_means))
+Glmnet_metric_means<-as.data.frame(cbind(ml_resample_means[Accuracy_index],ml_resample_means[-Accuracy_index]))
+#change col and rownames
+colnames(Glmnet_metric_means)<-c("Accuracy","Kappa")
+Glmnet_metric_means$Model<-modelID
+#save
+write.csv(Glmnet_metric_means[,c(3,1,2)], file=paste(output_dir,project_id,project_name,"_glmnet_all_mod_metrics.csv",sep=""),row.names=F,quote=FALSE)
 
 
+#Define Metrics
+use_metrics<-c("Accuracy","Kappa")
+
+#For loop
+for (pMetric in use_metrics){
+  
+  #Print Metric to make sure okay.
+  print(pMetric)
+  
+  #Subset to Metric using grep
+  Metric_grep = paste("*",pMetric,sep="") # define grep
+  metric_results<-ml_resample$values[,grep(Metric_grep,colnames(ml_resample$values))] # grep subset
+  names(metric_results)
+  
+  # Change model names. BE CAREFUL HERE!!!! THIS IS BASED ON ON A PREDEFINED LIST. IF YOU ARE UNSURE SWITCH TO THE FIRS LINE BELOW!!!!!
+  #names(Accuracy_results)<-unlist(strsplit(x=names(Accuracy_results), split=".Accuracy",)) #use this if unsure. 
+  names(metric_results)<-modelID # modelID !!!! BE CAREFUL !!!!
+
+  #Sort models by metric
+  metric_plot<-metric_results[,row.names(as.matrix(sort(sapply(metric_results,mean),decreasing = F)))]
+  #add dataset name
+  metric_plot$Datasets<-c("Glmnet_GAP")
+  #Melt for ggplot
+  metric_plot2<-melt(metric_plot, id="Datasets")  
+  #Change colnames
+  colnames(metric_plot2)<-c("GeneLists","Model",pMetric)
+
+  #Boxplots
+  title=paste(pMetric, "of 10k Bootstrap Glmnet Models in GAP",sep=" ")
+  ggplot(metric_plot2,
+    aes_string(x="Model",y=pMetric, colour = "Model")) +
+    #geom_point() + 
+    geom_boxplot(notch=T)+
+    coord_flip()+
+    ggtitle(title)
+  ggsave(paste(figs_dir,title,".png",sep=""))
+}
+
+
+
+```
+
+
+
+## Under Construction ##########################################################################################
+```{r}
+###################################################################################
+## Under Construction
 #pick model and name
 input_model=glmnet_fit_b
 input_model_name="glm"
@@ -394,16 +417,6 @@ write.table(t(matrixout), file=paste(output_dir,project_id,project_name,"glmnet_
 model_strat_confuse_df<-create_table_df(GX_DF_full_adj,27,predict_fit)
 #plot tables
 table_fun_ml(model_strat_confuse_df,input_model_name)
-
-
-```
-
-
-
-## Under Construction ##########################################################################################
-```{r}
-###################################################################################
-## Under Construction
 
 
 #modellist<- list(HF_glm=p1_glm,HD_glm=p2_glm)

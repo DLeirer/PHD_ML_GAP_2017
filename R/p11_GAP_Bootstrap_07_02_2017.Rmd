@@ -396,7 +396,56 @@ for (pMetric in use_metrics){
 
 ```
 
+# Missclassification
+```{r }
+project_name = "glmnet_missclass"
+dim(glmnet_1_Gx$pred)
+glmnet_1_Gx$pred[1:10,]
+glmnet_1_Gx$pred[1:10,]
 
+
+table(glmnet_1_Gx$pred$rowIndex)
+
+glmnet_3_PRS$pred[1:10,]
+Function to make list of 
+
+
+##pseudocode
+#Function 1 
+outputlist<- #define emptylist 
+for Mod_Num in 1:length(modellist){
+  tempMod<-modelist(Mod_Num)
+  if tempMod = glmnet #check if glmnet
+    tempHP<-extract hyperparameters
+    tempDF<-extract dataframe subset to hyperparameters (dplyr)
+    colnames(tempDF)<- #newcolnames
+    tempDF$sampleID <- #add sampleID column to tempDF
+  
+  elif tempMod = glm #check if glm
+    tempDF<-extract dataframe
+  
+  else
+    print ("WARNING: input not recognised as caret glmnet or glm object")
+    tempDF<-NA
+  tempDF$sampleID <- #add sampleID column to tempDF
+  
+  outputlist<- tempDF #add tempDF to list
+  return(outputlist)
+}
+
+save outputlist as compressed r object.
+
+#Function 2 
+outputlist<- #define emptylist 
+
+
+
+
+
+
+
+
+```
 
 ## Under Construction ##########################################################################################
 ```{r}

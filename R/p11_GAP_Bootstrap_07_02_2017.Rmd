@@ -403,15 +403,16 @@ dim(glmnet_1_Gx$pred)
 glmnet_1_Gx$pred[1:10,]
 glmnet_1_Gx$pred[1:10,]
 
+tglmnettest<-table(glmnet_1_Gx$pred$rowIndex)
+summary(as.data.frame(tglmnettest)$Freq)
 
-table(glmnet_1_Gx$pred$rowIndex)
 
 glmnet_3_PRS$pred[1:10,]
 Function to make list of 
 
 
 ##pseudocode
-#Function 1 
+#Function 1: extract data
 outputlist<- #define emptylist 
 for Mod_Num in 1:length(modellist){
   tempMod<-modelist(Mod_Num)
@@ -435,7 +436,7 @@ for Mod_Num in 1:length(modellist){
 
 save outputlist as compressed r object.
 
-#Function 2 
+#Function 2: 
 outputlist<- #define emptylist 
 
 

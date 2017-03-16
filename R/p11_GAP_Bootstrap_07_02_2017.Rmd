@@ -422,10 +422,9 @@ Function to make list of
 ##pseudocode
 #Function 1: extract data
 data_get_fun <-function(list_models,names_models){
-  outputlist<- #define emptylist 
-  
+  outputlist<- list(NULL) #define emptylist 
   for (Mod_Num in 1:length(list_models)){
-    tempMod<-list_models[Mod_Num]
+    tempMod<-list_models[[Mod_Num]]
     tempModname <- names_models[Mod_Num]
     #Check if glmnet
     if (tempMod$method == "glmnet"){
@@ -433,23 +432,28 @@ data_get_fun <-function(list_models,names_models){
       tempDF<-tempMod$pred
       tempDF<-filter(tempDF, alpha == tempHP[,"alpha"]  & lambda == tempHP[,"lambda"])
       #tempDF$sampleID <- #add sampleID column to tempDF  
-    #check if GLM
+      #check if GLM
     #} else if (tempMod$method == "glm"){
       #tempDF<-tempMod$pred
       #tempDF$sampleID <- #add sampleID column to tempDF  
-  
+    
     } #else #error if not glm or glmnet
       #print ("WARNING: input not recognised as caret glmnet or glm object")
       #tempDF<-NA
-
-    
-    outputlist[[name]] <- tempDF #add tempDF to list
+  
+  
+    outputlist[[tempModname]] <- tempDF #add tempDF to list
   
   } #end bracket for loop
+
   return(outputlist)
 } #end bracket function 
 
-<-data_get_fun[glmnet_models,modelID]
+glmnet_models
+
+output_dfs<-data_get_fun(glmnet_models,modelID)
+
+output_dfs
 
 
 outputlist<- #define emptylist 

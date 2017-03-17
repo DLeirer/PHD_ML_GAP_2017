@@ -422,38 +422,65 @@ Function to make list of
 ##pseudocode
 #Function 1: extract data
 data_get_fun <-function(list_models,names_models){
-  outputlist<- list(NULL) #define emptylist 
+  outputlist<- list() #define emptylist 
+  #For loop start
   for (Mod_Num in 1:length(list_models)){
     tempMod<-list_models[[Mod_Num]]
-    tempModname <- names_models[Mod_Num]
+    tempModname <- paste("DF",names_models[Mod_Num],sep="_")
+    
     #Check if glmnet
     if (tempMod$method == "glmnet"){
       tempHP<-tempMod$bestTune
       tempDF<-tempMod$pred
       tempDF<-filter(tempDF, alpha == tempHP[,"alpha"]  & lambda == tempHP[,"lambda"])
       #tempDF$sampleID <- #add sampleID column to tempDF  
-      #check if GLM
-    #} else if (tempMod$method == "glm"){
-      #tempDF<-tempMod$pred
+      
+      #check else if GLM
+    } else if (tempMod$method == "glm"){
+      tempDF<-tempMod$pred
       #tempDF$sampleID <- #add sampleID column to tempDF  
-    
     } #else #error if not glm or glmnet
       #print ("WARNING: input not recognised as caret glmnet or glm object")
       #tempDF<-NA
   
-  
+    #add to output list 
     outputlist[[tempModname]] <- tempDF #add tempDF to list
   
   } #end bracket for loop
-
+  #return full output
   return(outputlist)
 } #end bracket function 
 
-glmnet_models
+
+#Get Prediction boolean.
+for (df_Num in 1:length(output_dfs)){  
+  output_dfs[[df_Num]]<-mutate(output_dfs[[df_Num]], Prediction = pred == obs)  
+}
+
+
+#Get Prediction boolean.
+for (df_Num in 1:length(output_dfs)){  
+  output_dfs[[df_Num]]<-mutate(output_dfs[[df_Num]], Prediction = pred == obs)  
+}
+
+
+test2res<-test2 %>% group_by(rowIndex) %>% summarise(avg=mean(Prediction))
+
+table(filter(test2,rowIndex == 1)$Predict)
+
 
 output_dfs<-data_get_fun(glmnet_models,modelID)
 
-output_dfs
+test2<-output_dfs[[1]]
+mutate(test2, )
+
+
+str(test2res)
+
+sort(test2res$avg)
+
+str(test2)
+
 
 
 outputlist<- #define emptylist 

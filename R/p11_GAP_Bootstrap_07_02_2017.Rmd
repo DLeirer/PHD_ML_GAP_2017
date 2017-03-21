@@ -396,30 +396,8 @@ for (pMetric in use_metrics){
 
 ```
 
-# Missclassification
-```{r }
-
-##### Set up #####
-#project name defined
-project_name = "glmnet_missclass"
-#Gene expression data to use. 
-GX_data<-GX_DF_adj[1:4,1:27]
-
-dim(glmnet_1_Gx$pred)
-glmnet_1_Gx$pred[1:10,]
-glmnet_1_Gx$pred[1:10,]
-
-tglmnettest<-table(glmnet_1_Gx$pred$rowIndex)
-summary(as.data.frame(tglmnettest)$Freq)
-
-
-
-
-glmnet_3_PRS$pred[1:10,]
-Function to make list of 
-
-
-##pseudocode
+# Missclassification Functions
+```{r missclassificationFunctions }
 #Function 1: extract data
 data_get_fun <-function(list_models,names_models){
   outputlist<- list() #define emptylist 
@@ -452,24 +430,145 @@ data_get_fun <-function(list_models,names_models){
 } #end bracket function 
 
 
+
+## Table function 1 demographics
+table_dem_fun<-function(pdata,table_name,stratify,listVars,catVars){
+  table1 <- CreateTableOne(vars = listVars, data = pdata, factorVars = catVars,strata=c(stratify),includeNA = T)
+  table1print<-print(table1)
+  table1print<-table1print[,-length(names(data.frame(table1print)))]
+  #write.csv(table1print, file=paste(P0_output_dir,"no_latex_",table_name,sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  #write.csv(stargazer(table1print,summary=FALSE), file=paste(P0_output_dir,"latex_",table_name,sep=""),row.names=F,col.names = F,sep="")
+}
+
+
+```
+
+
+# Missclassification
+```{r }
+
+##### Set up #####
+#project name defined
+project_name = "glmnet_missclass"
+#Gene expression data to use. 
+GX_data<-GX_DF_adj[1:27]
+
+#Function to get dataframes
+output_dfs<-data_get_fun(glmnet_models,modelID)
+
+
 #Get Prediction boolean.
 for (df_Num in 1:length(output_dfs)){  
   output_dfs[[df_Num]]<-mutate(output_dfs[[df_Num]], Prediction = pred == obs)  
 }
+save(output_dfs, file=paste(output_dir,project_id,project_name,"List_of_DFs_bool.rdata",sep=""), compress = T)
 
-
-#Get Prediction boolean.
+#Dataframe to add misclassification.
+PhenoMC_Data<-GX_data
+#Get percentages for each rowIndex and add to dataframe.
 for (df_Num in 1:length(output_dfs)){  
-  output_dfs[[df_Num]]<-mutate(output_dfs[[df_Num]], Prediction = pred == obs)  
+  temp_percent<-output_dfs[[df_Num]] %>% group_by(rowIndex) %>% summarise(avg=mean(Prediction))
+  #colnames(temp_percent)[2]<-names(output_dfs)[df_Num]
+  colnames(temp_percent)[2]<-paste("Acc",modelID[df_Num],sep="_")
+  PhenoMC_Data<-cbind(PhenoMC_Data,temp_percent[,2])
 }
 
+#Save output
+write.csv(PhenoMC_Data, file=paste(output_dir,project_id,project_name,"_Sample_Percent_accuracy.csv",sep=""),row.names=F,quote=FALSE)
 
-test2res<-test2 %>% group_by(rowIndex) %>% summarise(avg=mean(Prediction))
+
+#################### Output & Characterisation for best model
+
+metric_plot2<-melt(PhenoMC_Data, id=c(names(PhenoMC_Data[,-c(28:35)])))
+#Change colnames
+colnames(metric_plot2)<-c(names(PhenoMC_Data[,-c(28:35)]),"Model","Percentage")
+#Control vs FEP
+title = "Density Plots Stratified by Control and FEP"
+ggplot(metric_plot2, aes(Percentage, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Model)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,"_Density_all_Pheno.png",sep=""))
+
+#Control vs Schizophrenia vs Other Psychoses
+title = "Density Plots Stratified by Control and Psychosis type"
+ggplot(metric_plot2, aes(Percentage, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Model)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,"_Density_all_diag.png",sep=""))
+
+
+# 1 Floor percentage. 
+# 2 Select relevant columns
+# 3 duplicate by 100
+# 4 add column called ConfusionMatrix
+# 5 100 vector, with "Phenotype" + True or False based on %
+# 6 Rbind
+
+
+
+
+
+floor(x)
+
+PhenoMC_Data[28:35]<-apply(PhenoMC_Data[28:35], 2, round, digits = 2)
+PhenoMC_Data[28:35]<-apply(PhenoMC_Data[28:35], 2, round, digits = 2)
+PhenoMC_Data$Acc_2_Gx_Scz
+
+# Calculate 
+filter(PhenoMC_Data,Acc_1_Gx < 0.3375)
+filter(PhenoMC_Data,Acc_1_Gx < 0.1)
+names(metric_plot2)
+color_metric="Percentage"
+str(metric_plot2)
+
+
+
+
+quantile(PhenoMC_Data$Acc_1_Gx)
+
+filter(PhenoMC_Data,Acc_1_Gx > 0.98)
+filter(PhenoMC_Data,Acc_2_Gx_Scz < 0.1)
+
+##############
+test<-filter(PhenoMC_Data,Phenotype == "FEP")
+test
+
+Diagnosis 
+Age 
+Ethnicity 
+Gender 
+Smoking 
+Medication
+PRS (not imputed.)
+
+
+
+
+
+
+
+
+##variables
+#lVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(phenodat)[65:73])
+lVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco")
+cVars <- c("Ethnicity","Tobacco")
+lVars2 <- c("Medication","dsmiv","icd10","ICD_DSM","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+cVars2 <- c("Medication","dsmiv","icd10","ICD_DSM")
+
+
+##table statified by case control
+stratVar <- "Phenotype" 
+table_name <-"Table_1_Demographics.csv"
+table_dem_fun(PhenoMC_Data,table_name,stratVar,lVars,cVars)
+table_name <-"Table_2_Clinicalinformation.csv"
+table_dem_fun(PhenoMC_Data,table_name,stratVar,lVars2,cVars2)
+
 
 table(filter(test2,rowIndex == 1)$Predict)
 
 
-output_dfs<-data_get_fun(glmnet_models,modelID)
 
 test2<-output_dfs[[1]]
 mutate(test2, )

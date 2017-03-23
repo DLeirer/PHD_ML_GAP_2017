@@ -475,7 +475,9 @@ for (df_Num in 1:length(output_dfs)){
 
 #Save output
 write.csv(PhenoMC_Data, file=paste(output_dir,project_id,project_name,"_Sample_Percent_accuracy.csv",sep=""),row.names=F,quote=FALSE)
+PhenoMC_Data<-read.csv(paste(output_dir,project_id,project_name,"_Sample_Percent_accuracy.csv",sep=""))
 
+str(PhenoMC_Data)
 
 ```
 
@@ -549,14 +551,38 @@ plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Tobacco","Titleofplot")
 
 #4. Medication
 plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Medication","Titleofplot")
+plot_fun_gx(PhenoMC_Data,"Medication","Acc_1_Gx","Medication","ICD_DSM","Titleofplot")
+
 
 ## Continues Variables
+#Create bins
+?quantile
+?cut
+PhenoMC_Data$Cuts<-cut(PhenoMC_Data$Acc_1_Gx,quantile(PhenoMC_Data$Acc_1_Gx,probs = c(0, 20, 40, 60, 80,100)/100))
+quantile(PhenoMC_Data$Acc_1_Gx,probs())
+quantile(x<-c(1:100,1:100),  probs = c(25, 50, 1, 2, 5, 10, 50, NA)/100)
+quantile(x<-c(0:100,0:100),  
+quantile(PhenoMC_Data$Acc_1_Gx,probs = c(0, 20, 40, 60, 80,100)/100)
+
+
 
 #5. Age 
 plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Medication","Titleofplot")
+plot_fun_gx(PhenoMC_Data,"Cuts","Age","Cuts","ICD_DSM","Titleofplot")
+ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = ICD_DSM)) +
+ggplot(PhenoMC_Data, aes(x=Cuts,y=Age, colour = ICD_DSM)) +
+  geom_jitter() +  
+  geom_boxplot(notch=F)+
+  coord_flip()+
+  ggtitle(title)
+
+
 
 #6. PRS (not imputed.)
-plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Medication","Titleofplot")
+PhenoMC_Data_white<-filter(PhenoMC_Data,Ethnicity=="White")
+PhenoMC_Data_white$Cuts<-cut(PhenoMC_Data_white$Acc_1_Gx,quantile(PhenoMC_Data_white$Acc_1_Gx,probs = c(0, 20, 40, 60, 80,100)/100))
+plot_fun_gx(PhenoMC_Data_white,"ICD_DSM","PRS_0.1","ICD_DSM","Cuts","Titleofplot")
+PhenoMC_Data_white$Cuts
 
 
 ```

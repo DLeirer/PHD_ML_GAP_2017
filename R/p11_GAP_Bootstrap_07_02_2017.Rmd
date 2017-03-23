@@ -445,7 +445,7 @@ table_dem_fun<-function(pdata,table_name,stratify,listVars,catVars){
 
 
 # Missclassification
-```{r }
+```{r misclassification calculations}
 
 ##### Set up #####
 #project name defined
@@ -477,8 +477,13 @@ for (df_Num in 1:length(output_dfs)){
 write.csv(PhenoMC_Data, file=paste(output_dir,project_id,project_name,"_Sample_Percent_accuracy.csv",sep=""),row.names=F,quote=FALSE)
 
 
-#################### Output & Characterisation for best model
+```
 
+#################### Output & Characterisation for best model
+```{r output results for missclassification}
+
+######################Density plots
+#######All models
 metric_plot2<-melt(PhenoMC_Data, id=c(names(PhenoMC_Data[,-c(28:35)])))
 #Change colnames
 colnames(metric_plot2)<-c(names(PhenoMC_Data[,-c(28:35)]),"Model","Percentage")
@@ -498,124 +503,67 @@ ggplot(metric_plot2, aes(Percentage, colour = ICD_DSM)) +
   ggtitle(title)
 ggsave(paste(figs_dir,project_id,project_name,"_Density_all_diag.png",sep=""))
 
+######Just Acc_1
+names(PhenoMC_Data)
+#Change colnames
+#Control vs FEP
+title = "Density Plot Stratified by Control and FEP"
+ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,"_1_Gx_Density_pheno.png",sep=""))
 
-# 1 Floor percentage. 
-# 2 Select relevant columns
-# 3 duplicate by 100
-# 4 add column called ConfusionMatrix
-# 5 100 vector, with "Phenotype" + True or False based on %
-# 6 Rbind
-
-
-
-
-
-floor(x)
-
-PhenoMC_Data[28:35]<-apply(PhenoMC_Data[28:35], 2, round, digits = 2)
-PhenoMC_Data[28:35]<-apply(PhenoMC_Data[28:35], 2, round, digits = 2)
-PhenoMC_Data$Acc_2_Gx_Scz
-
-# Calculate 
-filter(PhenoMC_Data,Acc_1_Gx < 0.3375)
-filter(PhenoMC_Data,Acc_1_Gx < 0.1)
-names(metric_plot2)
-color_metric="Percentage"
-str(metric_plot2)
+#Control vs Schizophrenia vs Other Psychoses
+title = "Density Plots Stratified by Control and Psychosis type"
+ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,"_1_Gx_Density_diag.png",sep=""))
 
 
+####### 1_Gx characterisation with phenotypes. 
 
-
-quantile(PhenoMC_Data$Acc_1_Gx)
-
-filter(PhenoMC_Data,Acc_1_Gx > 0.98)
-filter(PhenoMC_Data,Acc_2_Gx_Scz < 0.1)
-
-##############
-test<-filter(PhenoMC_Data,Phenotype == "FEP")
-test
-
-Diagnosis 
-Age 
-Ethnicity 
-Gender 
-Smoking 
-Medication
-PRS (not imputed.)
-
-
-
-
-
-
-
-
-##variables
-#lVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco",names(phenodat)[65:73])
-lVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco")
-cVars <- c("Ethnicity","Tobacco")
-lVars2 <- c("Medication","dsmiv","icd10","ICD_DSM","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
-cVars2 <- c("Medication","dsmiv","icd10","ICD_DSM")
-
-
-##table statified by case control
-stratVar <- "Phenotype" 
-table_name <-"Table_1_Demographics.csv"
-table_dem_fun(PhenoMC_Data,table_name,stratVar,lVars,cVars)
-table_name <-"Table_2_Clinicalinformation.csv"
-table_dem_fun(PhenoMC_Data,table_name,stratVar,lVars2,cVars2)
-
-
-table(filter(test2,rowIndex == 1)$Predict)
-
-
-
-test2<-output_dfs[[1]]
-mutate(test2, )
-
-
-str(test2res)
-
-sort(test2res$avg)
-
-str(test2)
-
-
-
-outputlist<- #define emptylist 
-for Mod_Num in 1:length(modellist){
-  tempMod<-modelist(Mod_Num)
-  if tempMod = glmnet #check if glmnet
-    tempHP<-extract hyperparameters
-    tempDF<-extract dataframe subset to hyperparameters (dplyr)
-    colnames(tempDF)<- #newcolnames
-    tempDF$sampleID <- #add sampleID column to tempDF
-  
-  elif tempMod = glm #check if glm
-    tempDF<-extract dataframe
-  
-  else
-    print ("WARNING: input not recognised as caret glmnet or glm object")
-    tempDF<-NA
-  tempDF$sampleID <- #add sampleID column to tempDF
-  
-  outputlist<- tempDF #add tempDF to list
-  return(outputlist)
+##Categorical Variables
+#1. Ethnicity
+plot_fun_gx <-function(inputd,xax,yax,col,pfacets,ptitle) {
+  ggplot(inputd, aes_string(x=xax,y=yax, colour = col)) +
+    #geom_point() +  
+    geom_jitter() +  
+    geom_boxplot(notch=F)+
+    coord_flip()+
+    facet_wrap(as.formula(paste("~", pfacets)))+
+    ggtitle(ptitle)  
 }
 
-save outputlist as compressed r object.
 
-#Function 2: 
-outputlist<- #define emptylist 
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Ethnicity","Titleofplot")
 
 
+#2. Gender
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Gender","Titleofplot")
 
 
 
+#3. Smoking 
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Tobacco","Titleofplot")
 
+#4. Medication
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Medication","Titleofplot")
+
+## Continues Variables
+
+#5. Age 
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Medication","Titleofplot")
+
+#6. PRS (not imputed.)
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Medication","Titleofplot")
 
 
 ```
+
+
+
+
 
 ## Under Construction ##########################################################################################
 ```{r}

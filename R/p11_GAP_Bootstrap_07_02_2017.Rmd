@@ -505,6 +505,9 @@ ggplot(metric_plot2, aes(Percentage, colour = ICD_DSM)) +
   ggtitle(title)
 ggsave(paste(figs_dir,project_id,project_name,"_Density_all_diag.png",sep=""))
 
+
+
+
 ######Just Acc_1
 names(PhenoMC_Data)
 #Change colnames
@@ -530,16 +533,16 @@ ggsave(paste(figs_dir,project_id,project_name,"_1_Gx_Density_diag.png",sep=""))
 plot_fun_gx <-function(inputd,xax,yax,col,pfacets,ptitle) {
   ggplot(inputd, aes_string(x=xax,y=yax, colour = col)) +
     #geom_point() +  
-    geom_jitter() +  
     geom_boxplot(notch=F)+
-    coord_flip()+
+    geom_jitter() + 
+    #coord_flip()+
     facet_wrap(as.formula(paste("~", pfacets)))+
     ggtitle(ptitle)  
 }
 
-
+PhenoMC_Data$Acc_6_Gx_PRS
 plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Ethnicity","Titleofplot")
-
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_6_Gx_PRS","ICD_DSM","Ethnicity","Titleofplot")
 
 #2. Gender
 plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Gender","Titleofplot")
@@ -567,8 +570,8 @@ quantile(PhenoMC_Data$Acc_1_Gx,probs = c(0, 20, 40, 60, 80,100)/100)
 
 
 #5. Age 
-plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Medication","Titleofplot")
 plot_fun_gx(PhenoMC_Data,"Cuts","Age","Cuts","ICD_DSM","Titleofplot")
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Age","ICD_DSM","Cuts","Titleofplot")
 ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = ICD_DSM)) +
 ggplot(PhenoMC_Data, aes(x=Cuts,y=Age, colour = ICD_DSM)) +
   geom_jitter() +  
@@ -583,6 +586,189 @@ PhenoMC_Data_white<-filter(PhenoMC_Data,Ethnicity=="White")
 PhenoMC_Data_white$Cuts<-cut(PhenoMC_Data_white$Acc_1_Gx,quantile(PhenoMC_Data_white$Acc_1_Gx,probs = c(0, 20, 40, 60, 80,100)/100))
 plot_fun_gx(PhenoMC_Data_white,"ICD_DSM","PRS_0.1","ICD_DSM","Cuts","Titleofplot")
 PhenoMC_Data_white$Cuts
+
+cor(PhenoMC_Data_white$Acc_1_Gx,PhenoMC_Data_white$PanssScore)
+
+
+#6. PANSS
+
+#Filter out controls
+PhenoMC_Data_nocon<-filter(PhenoMC_Data,ICD_DSM!="Control")
+
+
+#Select model data
+pmodel<-"Acc_1_Gx"
+
+#get quantiles for cutting into equal groups
+Pquantiles<-quantile(PhenoMC_Data_nocon[,pmodel], probs = c(0,0.25,0.5,0.75,1))
+#round and 
+quantCuts<-as.vector(round(Pquantiles, 2)*100)[-1]
+#create cuts and add to DF
+PhenoMC_Data_nocon$Accuracy<-cut(PhenoMC_Data_nocon[,pmodel],Pquantiles,labels=quantCuts,include.lowest = T)
+
+
+
+
+pan<-c("PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+
+panCuts<-"Accuracy"
+PanssDF<-PhenoMC_Data_nocon
+#PanssDF<-filter(PhenoMC_Data_nocon,Ethnicity == "White")
+n=1
+plot_fun_gx(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","Full PANSS vs binned Accuracy of sample classification")
+ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=2
+plot_fun_gx(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Positive subscale vs binned Accuracy of sample classification")
+ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=3
+plot_fun_gx(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Negative subscale vs binned Accuracy of sample classification")
+ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=4
+plot_fun_gx(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Psychopathology subscale vs binned Accuracy of sample classification")
+ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+
+names(PanssDF)
+anovaDF<-PanssDF[complete.cases(PanssDF[,c(17,37)]),]
+str(anovaDF)
+dim(anovaDF)
+anovaDF$Accuracynum<-as.numeric(anovaDF$Accuracy)
+?aov
+#anova for Accuracy vs panns
+fit <- aov(PanssScore ~ Accuracy, data=anovaDF)
+fit$residuals
+
+t.test(anovaDF$Accuracynum,anovaDF$PanssPsycho)
+
+###corelation between panss and accuracy
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz$PanssPsycho)
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy$PanssPsycho)
+t.test(anovaDF$Accuracynum,)
+filter(anovaDF$Accuracy)
+
+
+
+### Create Correlation Matrix? and plot? Make Table
+n=1
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz[,pan[n]])
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy[,pan[n]])
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point()
+
+
+n=2
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz[,pan[n]])
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy[,pan[n]])
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point()
+
+
+n=3
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz[,pan[n]])
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy[,pan[n]])
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point()
+
+n=4
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz[,pan[n]])
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy[,pan[n]])
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point()
+
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "icd10")) +
+  geom_point()
+
+ggplot(corDFOPSy, aes_string(x="Acc_1_Gx",y=pan[n], colour = "icd10")) +
+  geom_point()+
+  facet_wrap("icd10")
+
+
+
+dim(corDFScz)
+?anova
+fit <- aov(PanssPsycho ~ Accuracy, data=anovaDF)
+
+plant.mod1 = lm(PanssPsycho ~ Accuracy, data = corDFOPSy)
+plant.mod1 = lm(PanssPsycho ~ Accuracy, data = corDFScz)
+summary(plant.mod1)
+str(anova(plant.mod1))
+confint(plant.mod1)
+
+corDFScz = data.frame(Fitted = fitted(plant.mod1),
+  Residuals = resid(plant.mod1), Treatment = corDFScz$PanssPsycho)
+
+title = "Density Plots Stratified by Control and Psychosis type"
+ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  ggtitle(title)
+
+n=1
+ggplot(PanssDF, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point() +
+  facet_wrap("ICD_DSM")
+
+
+
+
+#PRS vs PANSS
+
+table(is.na(PhenoMC_Data$PanssScore))
+table(is.na(PhenoMC_Data$PRS_0.01))
+table(is.na(pansNAremoved$PRS_0.05))
+
+pansNAremoved<-PhenoMC_Data[!is.na(PhenoMC_Data$PanssScore),]
+pansNAremovedNAPRS<-pansNAremoved[!is.na(pansNAremoved$PRS_0.05),]
+pansNAremovedNAPRS2<-filter(pansNAremovedNAPRS,ICD_DSM =="Schizophrenia")
+pansNAremovedNAPRS2<-filter(pansNAremovedNAPRS, Ethnicity =="White")
+cor(pansNAremovedNAPRS2$,pansNAremovedNAPRS2$PanssScore)
+
+cor(pansNAremovedNAPRS2$PanssScore,pansNAremovedNAPRS2[,c(18:27)])
+dim(pansNAremovedNAPRS2)
+
+(PhenoMC_Data$PanssScore)
+
+melt(pansNAremovedNAPRS)
+
+plot_fun_gx(pansNAremovedNAPRS,panCuts,pan[n],panCuts,"ICD_DSM","Panss score vs binned Accuracy of sample classification")
+
+scale()
+pansNAremovedNAPRS[,c(18:27)]<-scale(pansNAremovedNAPRS[,c(18:27)], center = TRUE, scale = TRUE)
+?scale
+
+metric_plot3<-melt(pansNAremovedNAPRS, id=c(names(pansNAremovedNAPRS[,-c(18:27)])))
+
+names(metric_plot3)
+ggplot(metric_plot3, aes(x=value,y=PanssScore, colour = ICD_DSM)) +
+  geom_point()+
+  facet_wrap("variable")
+  
+geom_jitter() +  
+  geom_boxplot(notch=F)+
+  coord_flip()+
+  ggtitle(title)
 
 
 ```
@@ -628,6 +814,14 @@ dim(smallp1)
 smallsort<-arrange(smallp1,rowIndex)
 
 cbind(smallsort[,1:3],expressionRFE$Phenotype)
+
+
+
+title = "Density Plots Stratified by Control and FEP"
+ggplot(metric_plot2, aes(Percentage, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ )+
+  ggtitle(title)
 
 
 ```

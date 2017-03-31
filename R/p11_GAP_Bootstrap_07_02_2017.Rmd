@@ -773,23 +773,7 @@ geom_jitter() +
 
 ```
 
-#################### Enrichment final models. 
-```{r Enrichment}
 
-#Load data
-glmnet_all_predictors<-read.csv(paste(output_dir,"p11_glmnet_boot_glmnet_all_mod_predictors.csv",sep=""))
-
-glmnet_all_predictors
-
-
-#Make venn diagram of overlap. For Gx, Gx_scz, PRS, PRS_Gx?
-
-
-#Enrichments Gx and Gx_scz and PRS.
-
-
-
-```
 ## Under Construction ##########################################################################################
 ```{r}
 ###################################################################################

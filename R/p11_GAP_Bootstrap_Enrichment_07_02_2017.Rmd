@@ -1,0 +1,130 @@
+---
+title: "Machine Learning"
+author: "DJL"
+date: "02/10/2016"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Overview
+
+**Aim**  
+Create Machine learning models using GAP data. 
+
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(plyr)
+library(dplyr)
+library(lubridate)
+library(reshape)
+library(tableone)
+library(stargazer)
+
+```
+
+#Functions
+```{r define functions, tidy=TRUE}
+
+
+```
+
+
+#Directories
+```{r Define directories}
+top_dir<-getwd()
+data_dir <-"./P0_Characterise/output/"
+data_dir0 <-"./data/"
+output_dir <-"./P11_glmnet_bootstrap/output/"
+figs_dir <-"./P11_glmnet_bootstrap/figs/"
+
+
+#Pre and post fixes.
+project_name = "glmnet_boot"
+project_id = "p11_"
+
+```
+
+
+
+# Missclassification
+```{r misclassification calculations}
+
+##### Set up #####
+#project name defined
+project_name = "glmnet_missclass"
+#Gene expression data to use. 
+GX_data<-GX_DF_adj[1:27]
+```
+
+
+#################### Enrichment final models. 
+```{r Enrichment}
+
+#Load data
+glmnet_all_predictors<-read.csv(paste(output_dir,"p11_glmnet_boot_glmnet_all_mod_predictors.csv",sep=""))
+
+glmnet_all_predictors
+
+
+#Make venn diagram of overlap. For Gx, Gx_scz, PRS, PRS_Gx?
+
+
+#Enrichments Gx and Gx_scz and PRS.
+
+
+
+```
+
+## Under Construction ##########################################################################################
+```{r}
+###################################################################################
+## Under Construction
+#pick model and name
+input_model=glmnet_fit_b
+input_model_name="glm"
+#use model to predict training data
+predict_fit<-predict.train(input_model, newdata = GX_DF_full_adj)
+cmatrix<-confusionMatrix(predict_fit, GX_DF_full_adj$Phenotype)
+matrixout<-data.frame(c(cmatrix$overall,cmatrix$byClass))
+#save metrics
+write.table(t(matrixout), file=paste(output_dir,project_id,project_name,"glmnet_confusionout.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+
+
+#make dataframes
+model_strat_confuse_df<-create_table_df(GX_DF_full_adj,27,predict_fit)
+#plot tables
+table_fun_ml(model_strat_confuse_df,input_model_name)
+
+
+#modellist<- list(HF_glm=p1_glm,HD_glm=p2_glm)
+
+#p1data<-p1_glm$pred
+#str(p1_glm$pred)
+#table(p1data$lambda)
+
+#p1filter<-filter(p1data,alpha== 0.1)
+#p1filter<-filter(p1filter,lambda < 0.0105)
+dim(p1filter)
+table(p1filter$rowIndex)
+
+smallp1<-p1filter[!duplicated(p1filter$rowIndex),]
+dim(smallp1)
+smallsort<-arrange(smallp1,rowIndex)
+
+cbind(smallsort[,1:3],expressionRFE$Phenotype)
+
+
+
+title = "Density Plots Stratified by Control and FEP"
+ggplot(metric_plot2, aes(Percentage, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ )+
+  ggtitle(title)
+
+
+```

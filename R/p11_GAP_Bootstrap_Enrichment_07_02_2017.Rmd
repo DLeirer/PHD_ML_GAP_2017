@@ -25,7 +25,9 @@ library(reshape)
 library(tableone)
 library(stargazer)
 library(VennDiagram)
-
+library(WGCNA)
+library(flashClust)
+library(data.table)
 ```
 
 #Functions
@@ -56,8 +58,7 @@ plotVennDia <- function(a, ...) {
 
 #Venn Diagram helper fun
 likes <- function(animals) {
-    ppl <- 
-    names(ppl) <- c("p", "d", "c", "s", "l")
+    ppl <- allpredictorsUnique
     for (i in 1:length(animals)) {
         ppl <- subset(ppl, ppl[animals[i]] == T)
     }
@@ -65,11 +66,6 @@ likes <- function(animals) {
 }
 
 
-unique(glmnet_all_predictors$Variables)
-
-
-
-glmnet_all_predictors[glmnet_all_predictors$Model == "1_Gx",2]%in%glmnet_all_predictors[glmnet_all_predictors$Model == "2_Gx_Scz",2]
 
 
 ```
@@ -82,6 +78,8 @@ data_dir <-"./P0_Characterise/output/"
 data_dir0 <-"./data/"
 output_dir <-"./P11_glmnet_bootstrap/output/"
 figs_dir <-"./P11_glmnet_bootstrap/figs/"
+Enrichment_dir <- "./P11_glmnet_bootstrap/Enrichment/"
+
 
 
 ##### Set up #####
@@ -109,33 +107,11 @@ modelID<-c("1_Gx","2_Gx_Scz","3_PRS","4_Demographics","5_PRS_Demo","6_Gx_PRS","7
 
 # Venn Diagram 
 ```{r Enrichment}
-
-grid.newpage()
-draw.triple.venn(area1 = 22, area2 = 20, area3 = 13, n12 = 11, n23 = 4, n13 = 5, 
-    n123 = 1, category = c("Dog People", "Cat People", "Lizard People"), lty = "blank", 
-    fill = c("skyblue", "pink1", "mediumorchid"))
-
-
-plotVennDia(c("d", "c", "l"), category = c("Dog People", "Cat People", "Lizard People"), 
-    lty = "blank", fill = c("skyblue", "pink1", "mediumorchid"))
-```
-
-
-# Enrichment final models. 
-```{r Enrichment}
-
-table(glmnet_all_predictors$Variables)
-
-table(glmnet_all_predictors$Model)
- 
-glmnet_all_predictors[glmnet_all_predictors$Model == "1_Gx",2]%in%glmnet_all_predictors[glmnet_all_predictors$Model == "2_Gx_Scz",2]
-
-
 #Make venn diagram of overlap. For Gx, Gx_scz, PRS, PRS_Gx?
 
 
 #drop factors
-allpredictors<- data.frame(lapply(glmnet_all_predictors, as.character), stringsAsFactors=F)
+allpredictors <- data.frame(lapply(glmnet_all_predictors, as.character), stringsAsFactors=F)
 
 #Get unique predictors
 allpredictorsUnique<-unique(allpredictors[2])
@@ -149,14 +125,95 @@ for (i in 1:length(modelID)){
   allpredictorsUnique[,modelID[i]]<-allpredictorsUnique[,1] %in% temp[,1]
 }
 
+#change rownames
 rownames(allpredictorsUnique)<-allpredictorsUnique[,1]
-allpredictorsUnique<-allpredictorsUnique[,c(2:9,1)]
+
+#define new colnames
+new_colnames<-c("Variables","Gx","Gx_Scz","PRS","Demographics","PRS_Demo","Gx_PRS","Gx_Demo","Gx_Demo_PRS")
+
+#colnames chage
+colnames(allpredictorsUnique)<-new_colnames
+
+
+#Venn Diagram 3 way
+jpeg(paste(figs_dir,project_id,project_name,"VennDiagram_3.jpg",sep=""),width= 800, height = 800, pointsize = 20)
+plotVennDia(c("Gx", "Gx_Scz","Gx_PRS"), category = c("Gx", "Gx_Scz","Gx_PRS"), lty = "blank", fill = c("skyblue", "pink1","mediumorchid"))
+dev.off()
+
+#Venn Diagram 4 way
+jpeg(paste(figs_dir,project_id,project_name,"VennDiagram_4.jpg",sep=""),width= 800, height = 800, pointsize = 20)
+plotVennDia(c("Gx", "Gx_Scz","Gx_PRS","Gx_Demo"), category = c("Gx", "Gx_Scz","Gx_PRS","Gx_Demo"), lty = "blank", fill = c("skyblue", "pink1","mediumorchid", "orange"))
+dev.off()
+
+
+```
 
 
 
-#Enrichments Gx and Gx_scz and PRS.
+
+## User List Enrichement for Gx probes Scz later
+```{r gene_list}
+#load background data
+all_probes_file<-"BackgroundEnrichment.tsv"
+all_probes<-read.csv(paste(data_dir0,all_probes_file,sep=""),sep="\t",header=TRUE)
+
+#create Gx subset
+Gx_probes<-allpredictorsUnique[allpredictorsUnique$Gx == T,]
+
+
+#Add Background column
+all_probes$GxBackground<-all_probes$TargetID%in%Gx_probes$Variables
+all_probes$GxBackground<-replace(all_probes$GxBackground,all_probes$GxBackground=="FALSE","BACKGROUND")
+all_probes$GxBackground<-replace(all_probes$GxBackground,all_probes$GxBackground=="TRUE","Gx")
+
+
+setwd(top_dir)
+setwd(Enrichment_dir)
+enrichments = userListEnrichment(all_probes$TargetID,all_probes$GxBackground,fnIn=c("GAP_reduced_GO_Biological_Process_2015.csv","GAP_reduced_GO_Cellular_Component_2015.csv","GAP_reduced_GO_Molecular_Function_2015.csv","GAP_reduced_Kegg2016.csv","GeneSetsMental_Pirooznia_2016final2.csv","GAP_reduced_Blood_WGCNA.csv","GAP_reduced_Brain_WGCNA.csv"),catNmIn=c("GO_BP","GO_CC","GO_MF","KEGG_2016","Pirooznia","Blood","Brain"),minGenesInCategory = 3)
+setwd(top_dir)
+enpv<-enrichments$pValue
+enrichment_probes<-unlist(lapply(enrichments$ovGenes,paste, collapse =";"))
+enpv$Genes<-enrichment_probes
+enpv<-enpv[order(enpv$InputCategories,enpv$Pvalues),]
+enpvDT<-data.table(enpv)
+enpvDT<-enpvDT[Pvalues < 0.05 & NumOverlap > 1,.SD[],by=InputCategories]
+
+write.csv(as.data.frame(enpvDT),file=paste(Enrichment_dir,project_id,project_name,"_Gx_enrichment_results.csv",sep=""),row.names=F)
 
 
 
 ```
 
+## User List Enrichement for Gx_Scz
+```{r gene_list}
+#load background data
+all_probes_file<-"BackgroundEnrichment.tsv"
+all_probes<-read.csv(paste(data_dir0,all_probes_file,sep=""),sep="\t",header=TRUE)
+
+#create Gx subset
+Gx_probes<-allpredictorsUnique[allpredictorsUnique$Gx_Scz == T,]
+
+
+
+#Add Background column
+all_probes$GxBackground<-all_probes$TargetID%in%Gx_probes$Variables
+all_probes$GxBackground<-replace(all_probes$GxBackground,all_probes$GxBackground=="FALSE","BACKGROUND")
+all_probes$GxBackground<-replace(all_probes$GxBackground,all_probes$GxBackground=="TRUE","Gx")
+
+
+setwd(top_dir)
+setwd(Enrichment_dir)
+enrichments = userListEnrichment(all_probes$TargetID,all_probes$GxBackground,fnIn=c("GAP_reduced_GO_Biological_Process_2015.csv","GAP_reduced_GO_Cellular_Component_2015.csv","GAP_reduced_GO_Molecular_Function_2015.csv","GAP_reduced_Kegg2016.csv","GeneSetsMental_Pirooznia_2016final2.csv","GAP_reduced_Blood_WGCNA.csv","GAP_reduced_Brain_WGCNA.csv"),catNmIn=c("GO_BP","GO_CC","GO_MF","KEGG_2016","Pirooznia","Blood","Brain"),minGenesInCategory = 3)
+setwd(top_dir)
+enpv<-enrichments$pValue
+enrichment_probes<-unlist(lapply(enrichments$ovGenes,paste, collapse =";"))
+enpv$Genes<-enrichment_probes
+enpv<-enpv[order(enpv$InputCategories,enpv$Pvalues),]
+enpvDT<-data.table(enpv)
+enpvDT<-enpvDT[Pvalues < 0.05 & NumOverlap > 1,.SD[],by=InputCategories]
+
+write.csv(as.data.frame(enpvDT),file=paste(Enrichment_dir,project_id,project_name,"_Gx_scz_enrichment_results.csv",sep=""),row.names=F)
+
+
+
+```

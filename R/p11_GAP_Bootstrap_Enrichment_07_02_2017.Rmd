@@ -65,7 +65,7 @@ likes <- function(animals) {
     nrow(ppl)
 }
 
-
+likes(c("Gx","Gx_Scz","Gx_PRS"))
 
 
 ```

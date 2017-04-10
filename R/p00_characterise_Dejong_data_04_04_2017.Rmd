@@ -1,0 +1,131 @@
+---
+title: "CellMix"
+author: "DJL"
+date: "17/02/2016"
+output:
+  word_document:
+    fig_height: 6
+---
+
+#CellMix approach:
+
+##Install and load Libraries:
+```{r Libraries, message=FALSE,warning=FALSE}
+rm(list = ls())
+dev.off()
+library(lumi)
+library(reshape)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(tableone)
+library(stargazer)
+library(illuminaHumanv4.db)
+library(illuminaHumanv3.db)
+
+
+
+```
+
+
+##Set directories:
+```{r directory}
+
+data_dir <-"./data/"
+P0_output_dir <-"./P0_Characterise/output/"
+P00_output_dir <-"./P00_Characterise_Dejong/output/"
+P00_figs_dir <-"./P00_Characterise_Dejong/figs/"
+
+```
+
+
+
+##Load gene expression data (Should be LumiBatch object):
+```{r}
+
+lumidata_full<-"Schizophrenia_analysis_files.Rdata"
+load(paste(data_dir,lumidata_full,sep=""))
+
+
+lumidata<-"GAP_FEP_Full_Gene_Expression_Data_Linear.RData"
+load(paste(data_dir,lumidata,sep=""))
+
+lumidata_full<-"GAP_FEP_eset_linear_full_adj_Data.RData"
+load(paste(P0_output_dir,lumidata_full,sep=""))
+
+```
+
+##Functions:
+```{r functions}
+
+## Table function 1 demographics
+table_dem_fun<-function(pdata,table_name,stratify,listVars,catVars){
+  table1 <- CreateTableOne(vars = listVars, data = pdata, factorVars = catVars,strata=c(stratify),includeNA = T)
+  table1print<-print(table1)
+  table1print<-table1print[,-length(names(data.frame(table1print)))]
+  write.csv(table1print, file=paste(P0_output_dir,"no_latex_",table_name,sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  write.csv(stargazer(table1print,summary=FALSE), file=paste(P0_output_dir,"latex_",table_name,sep=""),row.names=F,col.names = F,sep="")
+}
+
+```
+
+##Gene symbol translation:
+```{r }
+expression_chip="illuminaHumanv3"
+
+
+#create NUID translation for Dejong data
+mapped_probes <- mappedkeys(eval(parse(text = paste(expression_chip, "NUID", sep=""))))
+probe_nuID_mapping <- as.data.frame(eval(parse(text = paste(expression_chip, "NUID", sep="")))[mapped_probes])
+
+```
+
+
+#Clean dataframes:
+```{r Clean Dataframes dejong}
+
+#Get GAP translation Dataframes
+#GAP_ALL<-eset_bg_log2_rsn_SVA@featureData@data
+GAP_final_probes_linear<-eset_linear_full_adj@featureData@data
+
+#Add Illumina v 3 probe ids
+colnames(probe_nuID_mapping)<-c("IlluminaV3","nuID")
+GAP_final_DejongFDF<-inner_join(GAP_final_probes_linear, probe_nuID_mapping, by = "nuID")
+
+
+
+#Expressiontable Full De jong probes
+Gx_Columns_dejong<-colnames(Schizophrenia_full_expression_table)
+
+Gx_Columns_dejong[1:10]
+
+#dejong_nuIDs mapped
+dejong_nuID<-probe_nuID_mapping[probe_nuID_mapping$IlluminaV3%in%Gx_Columns_dejong,]
+
+#probe translate subset to dejong probes
+GAP_final_dejongprobes<-GAP_final_DejongFDF[GAP_final_DejongFDF$nuID%in%dejong_nuID$nuID,]
+
+#subset to gene expression dataframe
+DejongGxsmall<-Schizophrenia_full_expression_table[,c("Diagnosis",GAP_final_dejongprobes$IlluminaV3)]
+
+#Change colnames to Gene Symbol
+colnames(DejongGxsmall)<-c("Diagnosis",GAP_final_dejongprobes$TargetID)
+
+
+#Phenodata
+Pheno_dejong<-Schizophrenia_phenotype_data[1:10,c(1,8:10,36)]
+
+
+
+```
+
+#Write rdata:
+```{r Clean Dataframes dejong}
+#Change DF name for later
+Gx_dejong<-DejongGxsmall
+
+save(Pheno_dejong,Gx_dejong,file=paste(P00_output_dir,"Dejong_reduced_Gx_data_and_pheno.RData",sep=""))
+
+
+```
+

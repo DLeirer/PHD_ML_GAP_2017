@@ -122,7 +122,7 @@ figs_dir <-"./P51_GAP_2way/figs/"
 
 #Pre and post fixes.
 project_name = "GAP_Train_2way"
-project_id = "p11_"
+project_id = "p51_"
 
 ```
 
@@ -147,6 +147,12 @@ load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
 GAP_Fdata<-filter(GAP_Dejong_Full_Fdata,GAP_GAPDJ==TRUE)
 
 #Remove all HS and Loc
+GAP_Fdata <- GAP_Fdata %>% 
+  mutate(LOC_HS_DROP=ifelse( grepl("^LOC",TargetID),"DROP",
+                       ifelse( grepl("^HS\\.",TargetID), "DROP","KEEP"))) 
+GAP_Fdata<-filter(GAP_Fdata,LOC_HS_DROP == "KEEP")
+table(GAP_Fdata$LOC_HS_DROP)
+
 
 table(GAP_Fdata$TargetID%in%colnames(Gx_dejong)) #should all be true. 
 
@@ -154,6 +160,8 @@ Gx_DF_input<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
 colnames(Gx_dejong)[1]<-"Phenotype"
 
 table(colnames(Gx_DF_input)%in%colnames(Gx_dejong)) #All equal?
+
+
 
 
 
@@ -171,48 +179,14 @@ set.seed(seed)
 
 #Control for algorithms
 control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="final") ## Steve added sampling argument. READ!!
-?trainControl
 
 #Define Metric to choose best model
 metric <- "Accuracy"
 
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","rf","parRF","svmLinear2","svmPoly","svmRadial","pcaNNet","avNNet","nnet","C5.0","elm","AdaBag")
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly")
 
-1) Linear discriminant analysis (lda, lda)
-2) Generalized Linear Model (logistic, glm)
-3) Stochastic Gradient Boosting (gbm, gbm)
-4) Lasso and Elastic-Net Regularized Generalized Linear Models (glmnet, glmnet)
-5) Naive Bayes (nb, nb)
-6) k-Nearest Neighbors (knn, knn)
-7) Support Vector Machines with Linear Kernel (svmLinear, svmLinear2)
-8) Support Vector Machines with Polynomial Kernel (svmPoly, svmPoly)
-9) Support Vector Machines with Radial Basis Function Kernel (svmRad, svmRadial)
-10) Random Forest (rf, rf)
-11) C5.0 (c50, c5.0)
-Parallel Random Forest (parRF)
-AdaBoost.M1 (AdaBoost.M1)
-Bagged AdaBoost (AdaBag)
-Extreme Learning Machine (elm)
-Neural Network (nnet)
-Model Averaged Neural Network (avNNet)
-Neural Networks with Feature Extraction  (pcaNNet)
-
-
-##### Add the folowing  
-Parallel Random Forest (parRF)
-AdaBoost.M1 (AdaBoost.M1)
-Bagged AdaBoost (AdaBag)
-glment (glmnet_h2o)
-Extreme Learning Machine (elm)
-Neural Network (nnet)
-Model Averaged Neural Network (avNNet)
-Neural Networks with Feature Extraction  (pcaNNet)
-
-
-
-modellist<-list(lda=fit.lda, logistic=fit.glm, glmnet=fit.glmnet,svmRad=fit.svmRadial,svmPoly=fit.svmPoly,svmLinear=fit.svmLinear, knn=fit.knn, nb=fit.nb,c50=fit.c50, rf=fit.rf, gbm=fit.gbm)
-#modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","AdaBoost.M1","AdaBag","elm","nnet","avNNet","pcaNNet")
-modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","AdaBag","elm","nnet","avNNet","pcaNNet")
-new_mlalgs<-c()
 
 ```
 
@@ -226,11 +200,16 @@ for(i in 1:length(modelID)){
   tryCatch({
     print(modelID[i])
     List_of_models[[modelID[i]]]<-"NA: Probable error"
-    List_of_models[[modelID[i]]] <- train(Phenotype~., data=Gx_DF_input[1:50,1:10], method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    set.seed(seed)
+    List_of_models[[modelID[i]]] <- train(Phenotype~., data=Gx_DF_input, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    print(List_of_models[[modelID[i]]])
+    temp<-List_of_models[[modelID[i]]]
+    save(temp, file=paste(output_dir,project_id,project_name,"_",modelID[i],".rdata",sep=""), compress = T)    
   }, 
   error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
 }
 
+save(List_of_models, file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""), compress = T)
 
 
 #GLMNET MODELS

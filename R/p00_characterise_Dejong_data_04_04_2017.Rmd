@@ -174,9 +174,8 @@ colnames(Gx_dejong)<-c("Diagnosis",GAP_Dejong_Full[GAP_Dejong_Full$DeJong_GAPDJ 
 
 
 
-
 #Phenodata
-Pheno_dejong<-Schizophrenia_phenotype_data[1:10,c(1,8:10,36)]
+Pheno_dejong<-Schizophrenia_phenotype_data[,c(1,8:10,36)]
 
 ```
 

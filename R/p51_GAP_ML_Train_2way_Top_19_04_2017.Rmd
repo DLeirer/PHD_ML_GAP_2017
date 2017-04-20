@@ -178,7 +178,7 @@ seed = 7
 set.seed(seed)
 
 #Control for algorithms
-control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="final") ## Steve added sampling argument. READ!!
+control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="all") ## Steve added sampling argument. READ!!
 
 #Define Metric to choose best model
 metric <- "Accuracy"

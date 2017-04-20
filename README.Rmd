@@ -34,7 +34,11 @@ proj/
 ├┬─ P4_Hybrid/  
 │├── figs/  
 │└── output/  
-├┬─ P101_Enrichment/  
+├┬─ P11_glmnet_bootstrap/  
+│├── figs/  
+│├── Enrichment/  
+│└── output/  
+├┬─ P51_GAP_2way/  
 │├── figs/  
 │└── output/  
 ├── R/  

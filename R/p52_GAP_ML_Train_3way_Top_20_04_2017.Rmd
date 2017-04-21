@@ -1,0 +1,980 @@
+---
+title: "Machine Learning"
+author: "DJL"
+date: "02/10/2016"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+#Overview
+
+**Aim**  
+Create Machine learning models using GAP data. 
+
+
+#Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(plyr)
+library(dplyr)
+library(randomForest)
+library(lubridate)
+library(doMC)
+library(caret)
+library(reshape)
+library(tableone)
+library(stargazer)
+library(mice)
+```
+
+#Functions
+```{r define functions, tidy=TRUE}
+
+#heatmap plotting function
+heatmap_ml<- function(model="NA",x_ax="NA",x_title="NA", y_ax="NA",y_title="NA",color_metric="NA",h_title="NA",save_output="NA") {
+  model_data<-model$results
+  model_data[,x_ax]<-as.factor(model_data[,x_ax])
+  model_data[,y_ax]<-as.factor(model_data[,y_ax])
+  model_data_metric<-model_data[,color_metric]
+  print(str(model_data))
+  ggplot(data = model_data, aes_string(x=x_ax, y=y_ax, fill=color_metric))+
+    geom_tile(color = "white")+
+    scale_fill_gradient2(low = "red", high = "blue", mid = "white", 
+      midpoint = mean(model_data_metric), limit = c(min(model_data_metric),max(model_data_metric)), space = "Lab", 
+      name="") +
+    theme_minimal()+ 
+    theme(axis.text.x = element_text(angle = 90, vjust = 1, 
+      size = 10, hjust = 1))+
+    coord_fixed()+
+    ggtitle(h_title) + xlab(x_title) + ylab(y_title)
+  ggsave(save_output)
+}
+
+#find simple model. 
+simple_model_fun<- function(ml_model,tol_percentage = 1, metric_sm=metric) {
+    tolerance(ml_model$results, metric = metric_sm, tol = tol_percentage, maximize = TRUE)    
+}
+
+#helper Function for creation stratified by confusionmatrix result data frame when making tables of enviroment vs classification 
+create_table_df<-function(input_data,use_columns,ml_data_predictions){
+  #create object to be used from now on. 
+  full_data<-input_data[,1:use_columns]
+  #add rownames to predictions
+  tpredictions<-data.frame(ml_data_predictions)
+  rownames(tpredictions)<-full_data$sampleID
+
+
+  #create test data with pheno predictions. 
+  model_test_pheno<-merge(tpredictions,full_data,by.x="row.names",by.y="sampleID")
+  ## Make confusion matrix column
+  model_test_pheno<-model_test_pheno %>% mutate(ConfusionMatrix=ifelse(Phenotype == "FEP" & ml_data_predictions=="Control","FEP_misclassed",
+                                            ifelse(Phenotype == "FEP" & ml_data_predictions=="FEP","FEP_true",
+                                            ifelse(Phenotype != "FEP" & ml_data_predictions=="FEP","Control_misclassified","Control_true"))))
+  # Center and Scale PRS
+  model_test_pheno[20:28]<-scale(model_test_pheno[20:28])
+  return (model_test_pheno)
+}
+
+
+# Function for making tables of confusion matrix stratified dataframes of ml models
+table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
+  #output name of model define
+  t_title=out_name_id
+  latex="_latex"
+  latex="_latex"
+  #Create Table of demographics with 4 predicted groups.
+  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco","ICD_DSM",names(mldata)[prs_col])
+  catVars <- c("Ethnicity","Tobacco","ICD_DSM")
+  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
+  table1print<-print(table1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+  write.csv(table1print, file=paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
+
+  
+  #Create Table of demographics with 4 predicted groups. 
+  listVars2 <- c("Medication","dsmiv","icd10","ICD_DSM","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+  catVars2 <- c("Medication","dsmiv","icd10","ICD_DSM")
+  table2_full <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
+  table2print<-print(table2_full,quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+  write.csv(table2print, paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  
+  #stargazer latex tables
+  table1sg<-stargazer(table1print[,1:5],summary=FALSE, rownames=T)
+  write.csv(table1sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
+  table2sg<-stargazer(table2print[,1:3],summary=FALSE, rownames=T)
+  write.csv(table2sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
+}
+
+```
+
+
+#Directories
+```{r Define directories}
+top_dir<-getwd()
+data_dir <-"./P0_Characterise/output/"
+data_dir0 <-"./data/"
+data_dejong_dir<-"./P00_Characterise_Dejong/output/"
+output_dir <-"./P52_GAP_3way/output/"
+figs_dir <-"./P52_GAP_3way/figs/"
+
+
+#Pre and post fixes.
+project_name = "GAP_Train_3way"
+project_id = "p52_"
+
+```
+
+
+
+
+#Load Data
+```{r Load data}
+
+
+load(file=paste(data_dejong_dir,"Dejong_reduced_Gx_data_and_pheno.RData",sep=""))
+load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
+#Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
+
+
+
+```
+
+#Clean Data
+```{r Clean Data}
+#Reduce Gene expression GAP to mirror Dejong. 
+GAP_Fdata<-filter(GAP_Dejong_Full_Fdata,GAP_GAPDJ==TRUE)
+
+#Remove all HS and Loc
+GAP_Fdata <- GAP_Fdata %>% 
+  mutate(LOC_HS_DROP=ifelse( grepl("^LOC",TargetID),"DROP",
+                       ifelse( grepl("^HS\\.",TargetID), "DROP","KEEP"))) 
+GAP_Fdata<-filter(GAP_Fdata,LOC_HS_DROP == "KEEP")
+table(GAP_Fdata$LOC_HS_DROP)
+
+fa_ICD_DSM<-GX_DF_adj$ICD_DSM
+fa_ICD_DSM[is.na(fa_ICD_DSM)]<- "Other_Psychosis"
+GX_DF_adj$ICD_DSM<-fa_ICD_DSM
+
+
+table(GAP_Fdata$TargetID%in%colnames(Gx_dejong)) #should all be true. 
+GX_DF_adj$ICD_DSM
+Gx_DF_input<-GX_DF_adj[,c("ICD_DSM",GAP_Fdata$TargetID)]
+colnames(Gx_dejong)[1]<-"Phenotype"
+
+table(colnames(Gx_DF_input)%in%colnames(Gx_dejong)) #All equal?
+
+
+
+
+
+```
+
+
+#Configure
+```{r Define Cores and Seed}
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="all") ## Steve added sampling argument. READ!!
+
+#Define Metric to choose best model
+metric <- "Accuracy"
+
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","rf","parRF","svmLinear2","svmPoly","svmRadial","pcaNNet","avNNet","nnet","C5.0","elm","AdaBag")
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly")
+modelID<-c("lda","glmnet","rf","parRF","pcaNNet")
+
+```
+
+# Machine Learning
+```{r Ml}
+
+
+#Machine Learning
+List_of_models<-list()
+for(i in 1:length(modelID)){
+  tryCatch({
+    print(modelID[i])
+    List_of_models[[modelID[i]]]<-"NA: Probable error"
+    set.seed(seed)
+    List_of_models[[modelID[i]]] <- train(ICD_DSM~., data=Gx_DF_input, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    print(List_of_models[[modelID[i]]])
+    temp<-List_of_models[[modelID[i]]]
+    save(temp, file=paste(output_dir,project_id,project_name,"_",modelID[i],".rdata",sep=""), compress = T)    
+  }, 
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+save(List_of_models, file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""), compress = T)
+
+
+#GLMNET MODELS
+modellist<-list(lda=fit.lda, logistic=fit.glm, glmnet=fit.glmnet,svmRad=fit.svmRadial,svmPoly=fit.svmPoly,svmLinear=fit.svmLinear, knn=fit.knn, nb=fit.nb,c50=fit.c50, rf=fit.rf, gbm=fit.gbm)
+##### Model 1
+ModelNum=2
+set.seed(seed)
+glmnet_1_Gx <- train(Phenotype~., data=Gx_DF_input[,1:300], method=modelID[ModelNum], metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+#save(glmnet_1_Gx, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+Gx_DF_input[1:10,1:10]
+
+
+##### Model 2
+ModelNum=2
+set.seed(seed)
+glmnet_2_GxS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_2_GxS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 3
+ModelNum=3
+set.seed(seed)
+glmnet_3_PRS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glm", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_3_PRS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 4
+ModelNum=4
+set.seed(seed)
+glmnet_4_Dem <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_4_Dem, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+
+##### Model 5
+ModelNum= 5
+set.seed(seed)
+glmnet_5_PrsD <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_5_PrsD, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 6
+ModelNum=6
+set.seed(seed)
+glmnet_6_Gx_PRS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_6_Gx_PRS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 7
+ModelNum=7
+set.seed(seed)
+glmnet_7_Gx_dem <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_7_Gx_dem, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 8
+ModelNum=8
+set.seed(seed)
+glmnet_8_Gx_d_prs <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_8_Gx_d_prs, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+
+
+##### Load all saved models
+for (ModelNum in 1:8){
+  load(file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""))  
+}
+
+
+##### Make list of all and save
+glmnet_models<-list(Gx = glmnet_1_Gx, Gx_Scz = glmnet_2_GxS, PRS = glmnet_3_PRS, Dem = glmnet_4_Dem, PRS_Dem = glmnet_5_PrsD, Gx_PRS = glmnet_6_Gx_PRS,  Gx_Dem = glmnet_7_Gx_dem,  Gx_Dem_PRS = glmnet_8_Gx_d_prs)
+save(glmnet_models, file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""), compress = T)
+
+```
+
+######Below Here is Just reference. DO not run. ################################################################################################################
+
+#Imputation (PRS + Tobacco) + Demographic factors
+```{r Load data}
+##### Fix Polygenic Risk Score
+#Set Seed
+seed = 7
+set.seed(seed)
+
+#Factors of demographics
+fa_ICD_DSM<-GX_DF_adj$ICD_DSM
+fa_ICD_DSM[is.na(fa_ICD_DSM)]<- "Other_Psychosis"
+GX_DF_adj$ICD_DSM<-fa_ICD_DSM
+fa_Pheno <-as.factor(GX_DF_adj$Phenotype)
+fa_Gender <-as.factor(GX_DF_adj$Gender)
+fa_Ethnicity <-as.factor(GX_DF_adj$Ethnicity)
+fa_Tobacco <-as.factor(GX_DF_adj$Tobacco)
+#Model Matrix
+design = model.matrix(~fa_Gender+fa_Ethnicity)  
+
+#####Impute PRS
+imputedesign = model.matrix(~fa_ICD_DSM+fa_Ethnicity)  #imputation factors
+
+#create dataframe for input into impute
+PRS_full_impute<-cbind(GX_DF_adj[,c("Phenotype","Ethnicity","ICD_DSM","PRS_0.1","sampleID")],imputedesign[,2:6])
+
+#Impute with KNN using preprocess.
+set.seed(seed)
+ImputePCA<-preProcess(PRS_full_impute,method= c("knnImpute"))
+
+#Get NAs
+PRS_NAs<-PRS_full_impute[is.na(PRS_full_impute$PRS_0.1),]
+
+#Predict 
+resultspred<-cbind(predict(ImputePCA, PRS_full_impute)[4],PRS_full_impute[c(1:3,5)])
+
+#Check all equal
+all.equal(GX_DF_adj$sampleID[c(2:280,1)],resultspred$sampleID[c(2:280,1)])
+
+#Prs back in original DF
+GX_DF_adj$PRS_0.1<-resultspred$PRS_0.1
+
+resultsNA<-resultspred[resultspred$sampleID%in%PRS_NAs$sampleID,]
+resultspred$Imputed<-ifelse(resultspred$sampleID%in%PRS_NAs$sampleID,"Imputed", "Real")
+
+#Make Plots
+#imputed  vs PRS
+title = "PRS_imputed_vs_real"
+ggplot(data = resultspred, 
+       aes(x = ICD_DSM, y=PRS_0.1  , colour = Imputed)) +
+  geom_jitter() +
+  geom_boxplot()+
+  facet_wrap(~ Ethnicity)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,title,".png",sep=""))
+
+
+```
+
+
+####Define all 8 models with predictors 
+```{r Create input dataframes for models}
+#Define all 8 models with predictors 
+Gx <-GX_DF_adj[,-c(1:3,5:27)]
+Gx_Scz<-Gx[,c("Phenotype",names(GX_DF_adj)[names(GX_DF_adj)%in%Genesets_HD$Gene_names])]
+PRS<-GX_DF_adj[,c(4,24)]  
+Demographics<-cbind(GX_DF_adj[,c(4,6)],design[,2:5])
+PRS_Demo<-cbind(GX_DF_adj[,c(4,6,24)],design[,2:5])
+Gx_PRS <- cbind(PRS,GX_DF_adj[,-c(1:27)])
+Gx_Demo <- cbind(Demographics,GX_DF_adj[,-c(1:27)])
+Gx_Demo_PRS <- cbind(PRS_Demo,GX_DF_adj[,-c(1:27)])
+
+#list of all model predictors
+predictorlists<-list(Gx,Gx_Scz,PRS,Demographics,PRS_Demo,Gx_PRS,Gx_Demo,Gx_Demo_PRS)
+
+#vector of model ids
+modelID<-c("1_Gx","2_Gx_Scz","3_PRS","4_Demographics","5_PRS_Demo","6_Gx_PRS","7_Gx_Demo","8_Gx_Demo_PRS")
+
+
+```
+
+
+
+#Configure
+```{r Define Cores and Seed}
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+
+set.seed(seed)
+#Control for algorithms, Bootstrapping, 10k = ~3 hours 8 cores 5k predictors 280 samples.
+control <- trainControl(method="boot", number=10000, savePredictions="all") ## Steve added sampling argument. READ!!
+
+
+#Define Metric to choose best model
+metric <- "Accuracy"
+
+```
+
+
+# Machine Learning
+```{r Ml}
+#GLMNET MODELS
+
+##### Model 1
+ModelNum=1
+set.seed(seed)
+glmnet_1_Gx <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_1_Gx, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 2
+ModelNum=2
+set.seed(seed)
+glmnet_2_GxS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_2_GxS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 3
+ModelNum=3
+set.seed(seed)
+glmnet_3_PRS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glm", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_3_PRS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 4
+ModelNum=4
+set.seed(seed)
+glmnet_4_Dem <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_4_Dem, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+
+##### Model 5
+ModelNum= 5
+set.seed(seed)
+glmnet_5_PrsD <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_5_PrsD, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 6
+ModelNum=6
+set.seed(seed)
+glmnet_6_Gx_PRS <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_6_Gx_PRS, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 7
+ModelNum=7
+set.seed(seed)
+glmnet_7_Gx_dem <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_7_Gx_dem, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+##### Model 8
+ModelNum=8
+set.seed(seed)
+glmnet_8_Gx_d_prs <- train(Phenotype~., data=predictorlists[[ModelNum]], method="glmnet", metric=metric, preProc=c("center", "scale"), trControl=control) 
+#Save Models
+save(glmnet_8_Gx_d_prs, file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""), compress = T)
+
+
+
+##### Load all saved models
+for (ModelNum in 1:8){
+  load(file=paste(output_dir,project_id,project_name,modelID[ModelNum],".rdata",sep=""))  
+}
+
+
+##### Make list of all and save
+glmnet_models<-list(Gx = glmnet_1_Gx, Gx_Scz = glmnet_2_GxS, PRS = glmnet_3_PRS, Dem = glmnet_4_Dem, PRS_Dem = glmnet_5_PrsD, Gx_PRS = glmnet_6_Gx_PRS,  Gx_Dem = glmnet_7_Gx_dem,  Gx_Dem_PRS = glmnet_8_Gx_d_prs)
+save(glmnet_models, file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""), compress = T)
+
+```
+
+
+
+
+## Check most important variables for models and plot tables
+```{r}
+load(file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""))
+
+
+
+#Create loop to get Var imp and metrics
+#Define List
+glm_var_list<-NULL
+#loop through models
+for (ModelNum in 1:8){
+  model_name<-modelID[ModelNum]
+  glmvarimp<-varImp(  glmnet_models[[ModelNum]], scale = FALSE)
+  glmvariables<-glmvarimp$importance
+  glmvariables$Variables<-rownames(glmvariables)
+  glmvariables$Model<-model_name
+  glmvariables<-filter(glmvariables,Overall !=0)
+  glmvariables<-arrange(glmvariables,desc(Overall))
+  #colnames(glmvariables)<-c(model_name,"Variable")
+  glm_var_list <- rbind(glm_var_list,glmvariables)
+}
+glm_var_list
+
+write.csv(glm_var_list, file=paste(output_dir,project_id,project_name,"_glmnet_all_mod_predictors.csv",sep=""),row.names=F,quote=FALSE) #save variables
+
+##Create loop to get metrics
+#Resamples
+ml_resample<-resamples(glmnet_models)
+
+#Save Mean for final models
+ml_resample_means<-sapply(ml_resample$values[,-1],mean)
+Accuracy_index<-grep("*Accuracy",names(ml_resample_means))
+Glmnet_metric_means<-as.data.frame(cbind(ml_resample_means[Accuracy_index],ml_resample_means[-Accuracy_index]))
+#change col and rownames
+colnames(Glmnet_metric_means)<-c("Accuracy","Kappa")
+Glmnet_metric_means$Model<-modelID
+#save
+write.csv(Glmnet_metric_means[,c(3,1,2)], file=paste(output_dir,project_id,project_name,"_glmnet_all_mod_metrics.csv",sep=""),row.names=F,quote=FALSE)
+
+
+#Define Metrics
+use_metrics<-c("Accuracy","Kappa")
+
+#For loop
+for (pMetric in use_metrics){
+  
+  #Print Metric to make sure okay.
+  print(pMetric)
+  
+  #Subset to Metric using grep
+  Metric_grep = paste("*",pMetric,sep="") # define grep
+  metric_results<-ml_resample$values[,grep(Metric_grep,colnames(ml_resample$values))] # grep subset
+  names(metric_results)
+  
+  # Change model names. BE CAREFUL HERE!!!! THIS IS BASED ON ON A PREDEFINED LIST. IF YOU ARE UNSURE SWITCH TO THE FIRS LINE BELOW!!!!!
+  #names(Accuracy_results)<-unlist(strsplit(x=names(Accuracy_results), split=".Accuracy",)) #use this if unsure. 
+  names(metric_results)<-modelID # modelID !!!! BE CAREFUL !!!!
+
+  #Sort models by metric
+  metric_plot<-metric_results[,row.names(as.matrix(sort(sapply(metric_results,mean),decreasing = F)))]
+  #add dataset name
+  metric_plot$Datasets<-c("Glmnet_GAP")
+  #Melt for ggplot
+  metric_plot2<-melt(metric_plot, id="Datasets")  
+  #Change colnames
+  colnames(metric_plot2)<-c("GeneLists","Model",pMetric)
+
+  #Boxplots
+  title=paste(pMetric, "of 10k Bootstrap Glmnet Models in GAP",sep=" ")
+  ggplot(metric_plot2,
+    aes_string(x="Model",y=pMetric, colour = "Model")) +
+    #geom_point() + 
+    geom_boxplot(notch=T)+
+    coord_flip()+
+    ggtitle(title)
+  ggsave(paste(figs_dir,project_id,project_name,"_",pMetric,"_boxplot.png",sep=""))
+}
+
+
+
+```
+
+# Missclassification Functions
+```{r missclassificationFunctions }
+#Function 1: extract data
+data_get_fun <-function(list_models,names_models){
+  outputlist<- list() #define emptylist 
+  #For loop start
+  for (Mod_Num in 1:length(list_models)){
+    tempMod<-list_models[[Mod_Num]]
+    tempModname <- paste("DF",names_models[Mod_Num],sep="_")
+    
+    #Check if glmnet
+    if (tempMod$method == "glmnet"){
+      tempHP<-tempMod$bestTune
+      tempDF<-tempMod$pred
+      tempDF<-filter(tempDF, alpha == tempHP[,"alpha"]  & lambda == tempHP[,"lambda"])
+      #tempDF$sampleID <- #add sampleID column to tempDF  
+      
+      #check else if GLM
+    } else if (tempMod$method == "glm"){
+      tempDF<-tempMod$pred
+      #tempDF$sampleID <- #add sampleID column to tempDF  
+    } #else #error if not glm or glmnet
+      #print ("WARNING: input not recognised as caret glmnet or glm object")
+      #tempDF<-NA
+  
+    #add to output list 
+    outputlist[[tempModname]] <- tempDF #add tempDF to list
+  
+  } #end bracket for loop
+  #return full output
+  return(outputlist)
+} #end bracket function 
+
+
+
+## Table function 1 demographics
+table_dem_fun<-function(pdata,table_name,stratify,listVars,catVars){
+  table1 <- CreateTableOne(vars = listVars, data = pdata, factorVars = catVars,strata=c(stratify),includeNA = T)
+  table1print<-print(table1)
+  table1print<-table1print[,-length(names(data.frame(table1print)))]
+  #write.csv(table1print, file=paste(P0_output_dir,"no_latex_",table_name,sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  #write.csv(stargazer(table1print,summary=FALSE), file=paste(P0_output_dir,"latex_",table_name,sep=""),row.names=F,col.names = F,sep="")
+}
+
+
+```
+
+
+# Missclassification
+```{r misclassification calculations}
+
+##### Set up #####
+#project name defined
+project_name = "glmnet_missclass"
+#Gene expression data to use. 
+GX_data<-GX_DF_adj[1:27]
+
+#Function to get dataframes
+output_dfs<-data_get_fun(glmnet_models,modelID)
+
+
+#Get Prediction boolean.
+for (df_Num in 1:length(output_dfs)){  
+  output_dfs[[df_Num]]<-mutate(output_dfs[[df_Num]], Prediction = pred == obs)  
+}
+save(output_dfs, file=paste(output_dir,project_id,project_name,"List_of_DFs_bool.rdata",sep=""), compress = T)
+
+#Dataframe to add misclassification.
+PhenoMC_Data<-GX_data
+#Get percentages for each rowIndex and add to dataframe.
+for (df_Num in 1:length(output_dfs)){  
+  temp_percent<-output_dfs[[df_Num]] %>% group_by(rowIndex) %>% summarise(avg=mean(Prediction))
+  #colnames(temp_percent)[2]<-names(output_dfs)[df_Num]
+  colnames(temp_percent)[2]<-paste("Acc",modelID[df_Num],sep="_")
+  PhenoMC_Data<-cbind(PhenoMC_Data,temp_percent[,2])
+}
+
+#Save output
+write.csv(PhenoMC_Data, file=paste(output_dir,project_id,project_name,"_Sample_Percent_accuracy.csv",sep=""),row.names=F,quote=FALSE)
+PhenoMC_Data<-read.csv(paste(output_dir,project_id,project_name,"_Sample_Percent_accuracy.csv",sep=""))
+
+str(PhenoMC_Data)
+
+```
+
+#################### Output & Characterisation for best model
+```{r output results for missclassification}
+
+######################Density plots
+#######All models
+metric_plot2<-melt(PhenoMC_Data, id=c(names(PhenoMC_Data[,-c(28:35)])))
+#Change colnames
+colnames(metric_plot2)<-c(names(PhenoMC_Data[,-c(28:35)]),"Model","Percentage")
+#Control vs FEP
+title = "Density Plots Stratified by Control and FEP"
+ggplot(metric_plot2, aes(Percentage, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Model)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,"_Density_all_Pheno.png",sep=""))
+
+#Control vs Schizophrenia vs Other Psychoses
+title = "Density Plots Stratified by Control and Psychosis type"
+ggplot(metric_plot2, aes(Percentage, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Model)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,"_Density_all_diag.png",sep=""))
+
+
+
+
+######Just Acc_1
+names(PhenoMC_Data)
+#Change colnames
+#Control vs FEP
+title = "Density Plot Stratified by Control and FEP"
+ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,"_1_Gx_Density_pheno.png",sep=""))
+
+#Control vs Schizophrenia vs Other Psychoses
+title = "Density Plots Stratified by Control and Psychosis type"
+ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,"_1_Gx_Density_diag.png",sep=""))
+
+
+####### 1_Gx characterisation with phenotypes. 
+
+##Categorical Variables
+#1. Ethnicity
+plot_fun_gx <-function(inputd,xax,yax,col,pfacets,ptitle) {
+  ggplot(inputd, aes_string(x=xax,y=yax, colour = col)) +
+    #geom_point() +  
+    geom_boxplot(notch=F)+
+    geom_jitter() + 
+    #coord_flip()+
+    facet_wrap(as.formula(paste("~", pfacets)))+
+    ggtitle(ptitle)  
+}
+
+PhenoMC_Data$Acc_6_Gx_PRS
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Ethnicity","Titleofplot")
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_6_Gx_PRS","ICD_DSM","Ethnicity","Titleofplot")
+
+#2. Gender
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Gender","Titleofplot")
+
+
+
+#3. Smoking 
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Tobacco","Titleofplot")
+
+#4. Medication
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_1_Gx","ICD_DSM","Medication","Titleofplot")
+plot_fun_gx(PhenoMC_Data,"Medication","Acc_1_Gx","Medication","ICD_DSM","Titleofplot")
+
+
+## Continues Variables
+#Create bins
+?quantile
+?cut
+PhenoMC_Data$Cuts<-cut(PhenoMC_Data$Acc_1_Gx,quantile(PhenoMC_Data$Acc_1_Gx,probs = c(0, 20, 40, 60, 80,100)/100))
+quantile(PhenoMC_Data$Acc_1_Gx,probs())
+quantile(x<-c(1:100,1:100),  probs = c(25, 50, 1, 2, 5, 10, 50, NA)/100)
+quantile(x<-c(0:100,0:100),  
+quantile(PhenoMC_Data$Acc_1_Gx,probs = c(0, 20, 40, 60, 80,100)/100)
+
+
+
+#5. Age 
+plot_fun_gx(PhenoMC_Data,"Cuts","Age","Cuts","ICD_DSM","Titleofplot")
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Age","ICD_DSM","Cuts","Titleofplot")
+ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = ICD_DSM)) +
+ggplot(PhenoMC_Data, aes(x=Cuts,y=Age, colour = ICD_DSM)) +
+  geom_jitter() +  
+  geom_boxplot(notch=F)+
+  coord_flip()+
+  ggtitle(title)
+
+
+
+#6. PRS (not imputed.)
+PhenoMC_Data_white<-filter(PhenoMC_Data,Ethnicity=="White")
+PhenoMC_Data_white$Cuts<-cut(PhenoMC_Data_white$Acc_1_Gx,quantile(PhenoMC_Data_white$Acc_1_Gx,probs = c(0, 20, 40, 60, 80,100)/100))
+plot_fun_gx(PhenoMC_Data_white,"ICD_DSM","PRS_0.1","ICD_DSM","Cuts","Titleofplot")
+PhenoMC_Data_white$Cuts
+
+cor(PhenoMC_Data_white$Acc_1_Gx,PhenoMC_Data_white$PanssScore)
+
+
+#6. PANSS
+
+#Filter out controls
+PhenoMC_Data_nocon<-filter(PhenoMC_Data,ICD_DSM!="Control")
+
+
+#Select model data
+pmodel<-"Acc_1_Gx"
+
+#get quantiles for cutting into equal groups
+Pquantiles<-quantile(PhenoMC_Data_nocon[,pmodel], probs = c(0,0.25,0.5,0.75,1))
+#round and 
+quantCuts<-as.vector(round(Pquantiles, 2)*100)[-1]
+#create cuts and add to DF
+PhenoMC_Data_nocon$Accuracy<-cut(PhenoMC_Data_nocon[,pmodel],Pquantiles,labels=quantCuts,include.lowest = T)
+
+
+
+
+pan<-c("PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+
+panCuts<-"Accuracy"
+PanssDF<-PhenoMC_Data_nocon
+#PanssDF<-filter(PhenoMC_Data_nocon,Ethnicity == "White")
+n=1
+plot_fun_gx(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","Full PANSS vs binned Accuracy of sample classification")
+ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=2
+plot_fun_gx(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Positive subscale vs binned Accuracy of sample classification")
+ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=3
+plot_fun_gx(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Negative subscale vs binned Accuracy of sample classification")
+ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=4
+plot_fun_gx(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Psychopathology subscale vs binned Accuracy of sample classification")
+ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+
+names(PanssDF)
+anovaDF<-PanssDF[complete.cases(PanssDF[,c(17,37)]),]
+str(anovaDF)
+dim(anovaDF)
+anovaDF$Accuracynum<-as.numeric(anovaDF$Accuracy)
+?aov
+#anova for Accuracy vs panns
+fit <- aov(PanssScore ~ Accuracy, data=anovaDF)
+fit$residuals
+
+t.test(anovaDF$Accuracynum,anovaDF$PanssPsycho)
+
+###corelation between panss and accuracy
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz$PanssPsycho)
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy$PanssPsycho)
+t.test(anovaDF$Accuracynum,)
+filter(anovaDF$Accuracy)
+
+
+
+### Create Correlation Matrix? and plot? Make Table
+n=1
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz[,pan[n]])
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy[,pan[n]])
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point()
+
+
+n=2
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz[,pan[n]])
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy[,pan[n]])
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point()
+
+
+n=3
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz[,pan[n]])
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy[,pan[n]])
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point()
+
+n=4
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$Acc_1_Gx,corDFScz[,pan[n]])
+cor(corDFOPSy$Acc_1_Gx,corDFOPSy[,pan[n]])
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point()
+
+ggplot(corDFScz, aes_string(x="Acc_1_Gx",y=pan[n], colour = "icd10")) +
+  geom_point()
+
+ggplot(corDFOPSy, aes_string(x="Acc_1_Gx",y=pan[n], colour = "icd10")) +
+  geom_point()+
+  facet_wrap("icd10")
+
+
+
+dim(corDFScz)
+?anova
+fit <- aov(PanssPsycho ~ Accuracy, data=anovaDF)
+
+plant.mod1 = lm(PanssPsycho ~ Accuracy, data = corDFOPSy)
+plant.mod1 = lm(PanssPsycho ~ Accuracy, data = corDFScz)
+summary(plant.mod1)
+str(anova(plant.mod1))
+confint(plant.mod1)
+
+corDFScz = data.frame(Fitted = fitted(plant.mod1),
+  Residuals = resid(plant.mod1), Treatment = corDFScz$PanssPsycho)
+
+title = "Density Plots Stratified by Control and Psychosis type"
+ggplot(PhenoMC_Data, aes(Acc_1_Gx, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  ggtitle(title)
+
+n=1
+ggplot(PanssDF, aes_string(x="Acc_1_Gx",y=pan[n], colour = "ICD_DSM")) +
+  geom_point() +
+  facet_wrap("ICD_DSM")
+
+
+
+
+#PRS vs PANSS
+
+table(is.na(PhenoMC_Data$PanssScore))
+table(is.na(PhenoMC_Data$PRS_0.01))
+table(is.na(pansNAremoved$PRS_0.05))
+
+pansNAremoved<-PhenoMC_Data[!is.na(PhenoMC_Data$PanssScore),]
+pansNAremovedNAPRS<-pansNAremoved[!is.na(pansNAremoved$PRS_0.05),]
+pansNAremovedNAPRS2<-filter(pansNAremovedNAPRS,ICD_DSM =="Schizophrenia")
+pansNAremovedNAPRS2<-filter(pansNAremovedNAPRS, Ethnicity =="White")
+cor(pansNAremovedNAPRS2$,pansNAremovedNAPRS2$PanssScore)
+
+cor(pansNAremovedNAPRS2$PanssScore,pansNAremovedNAPRS2[,c(18:27)])
+dim(pansNAremovedNAPRS2)
+
+(PhenoMC_Data$PanssScore)
+
+melt(pansNAremovedNAPRS)
+
+plot_fun_gx(pansNAremovedNAPRS,panCuts,pan[n],panCuts,"ICD_DSM","Panss score vs binned Accuracy of sample classification")
+
+scale()
+pansNAremovedNAPRS[,c(18:27)]<-scale(pansNAremovedNAPRS[,c(18:27)], center = TRUE, scale = TRUE)
+?scale
+
+metric_plot3<-melt(pansNAremovedNAPRS, id=c(names(pansNAremovedNAPRS[,-c(18:27)])))
+
+names(metric_plot3)
+ggplot(metric_plot3, aes(x=value,y=PanssScore, colour = ICD_DSM)) +
+  geom_point()+
+  facet_wrap("variable")
+  
+geom_jitter() +  
+  geom_boxplot(notch=F)+
+  coord_flip()+
+  ggtitle(title)
+
+
+```
+
+
+## Under Construction ##########################################################################################
+```{r}
+###################################################################################
+## Under Construction
+#pick model and name
+input_model=glmnet_fit_b
+input_model_name="glm"
+#use model to predict training data
+predict_fit<-predict.train(input_model, newdata = GX_DF_full_adj)
+cmatrix<-confusionMatrix(predict_fit, GX_DF_full_adj$Phenotype)
+matrixout<-data.frame(c(cmatrix$overall,cmatrix$byClass))
+#save metrics
+write.table(t(matrixout), file=paste(output_dir,project_id,project_name,"glmnet_confusionout.csv",sep=""),row.names=F,quote=FALSE,sep = ",")
+
+
+#make dataframes
+model_strat_confuse_df<-create_table_df(GX_DF_full_adj,27,predict_fit)
+#plot tables
+table_fun_ml(model_strat_confuse_df,input_model_name)
+
+
+#modellist<- list(HF_glm=p1_glm,HD_glm=p2_glm)
+
+#p1data<-p1_glm$pred
+#str(p1_glm$pred)
+#table(p1data$lambda)
+
+#p1filter<-filter(p1data,alpha== 0.1)
+#p1filter<-filter(p1filter,lambda < 0.0105)
+dim(p1filter)
+table(p1filter$rowIndex)
+
+smallp1<-p1filter[!duplicated(p1filter$rowIndex),]
+dim(smallp1)
+smallsort<-arrange(smallp1,rowIndex)
+
+cbind(smallsort[,1:3],expressionRFE$Phenotype)
+
+
+
+title = "Density Plots Stratified by Control and FEP"
+ggplot(metric_plot2, aes(Percentage, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ )+
+  ggtitle(title)
+
+
+```

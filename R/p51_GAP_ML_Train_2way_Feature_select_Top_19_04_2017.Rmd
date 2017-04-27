@@ -28,10 +28,6 @@ library(reshape)
 library(tableone)
 library(stargazer)
 library(mice)
-library(caretEnsemble)
-
-
-
 ```
 
 #Functions
@@ -187,7 +183,7 @@ control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down
 #Define Metric to choose best model
 metric <- "Accuracy"
 
-modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","xgbTree","AdaBag","AdaBoost.M1")
 #modelID<-c("lda","glm","gbm","glmnet","nb","knn","rf","parRF","svmLinear2","svmPoly","svmRadial","pcaNNet","avNNet","nnet","C5.0","elm","AdaBag")
 #modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly")
 

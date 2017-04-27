@@ -138,7 +138,7 @@ save(ml_models, file=paste(P1_output_dir,"Classification_models.rdata",sep=""), 
 ```{r Plotting of results}
 
 ###########################Use classification_model_script_gap_and_impact.rmd
-
+load(file=paste(P1_output_dir,"Classification_models.rdata",sep=""))
 
 #extract accuracy Models
 ml_resample<-resamples(ml_models)

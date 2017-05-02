@@ -135,7 +135,7 @@ project_id = "p51_"
 
 load(file=paste(data_dejong_dir,"Dejong_reduced_Gx_data_and_pheno.RData",sep=""))
 load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
-#Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
+Genesets_HD<-read.csv(paste(data_dir0,"GeneSetsMental_Pirooznia_2016.csv",sep=""))
 
 
 
@@ -156,12 +156,62 @@ table(GAP_Fdata$LOC_HS_DROP)
 
 table(GAP_Fdata$TargetID%in%colnames(Gx_dejong)) #should all be true. 
 
-Gx_DF_input<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
+Gx_DF_1_locHS<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
 colnames(Gx_dejong)[1]<-"Phenotype"
 
-table(colnames(Gx_DF_input)%in%colnames(Gx_dejong)) #All equal?
+table(colnames(Gx_DF_1_locHS)%in%colnames(Gx_dejong)) #All equal?
 
 
+
+### Remove High correlation probes. 
+#make dataset of features that are not probes for backup and later use.
+
+
+cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
+  # find highly correlated probes
+  correlationMatrix <- cor(gene_exprs_DF)
+  # find attributes that are highly corrected (ideally >0.75)
+  findCorrelation(correlationMatrix, cutoff=cor_cutoff)
+
+}
+
+
+#ONLY KEEP PHENOTYPE
+Gx_DF_1_locHS[1:10,1:10]
+#find highly correlated probes set to 80 by default.
+highlyCorrelated<-cor_fun(Gx_DF_1_locHS[,-c(1)],cor_cutoff=0.8)
+highlyCorrelated
+
+
+# remove highly correlated probes
+Gx_DF_2_cor<-Gx_DF_1_locHS[,-c(highlyCorrelated+1)]##+1 is for phenotype col. Adds 1 to each number. 
+dim(Gx_DF_2_cor)
+dim(Gx_DF_1_locHS)
+
+
+#Low Variance Probes removed
+cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
+  # find highly correlated probes
+  correlationMatrix <- cor(gene_exprs_DF)
+  # find attributes that are highly corrected (ideally >0.75)
+  findCorrelation(correlationMatrix, cutoff=cor_cutoff)
+
+}
+
+num<-Gx_DF_2_cor[,4]
+var(num, y = NULL, na.rm = FALSE, use = "everything")
+var(Gx_DF_2_cor[1:10,2:4], y = NULL, na.rm = FALSE, use = "everything")
+
+Gx_vars<-apply(Gx_DF_2_cor[,c(-1)], 2, function(x) var(x,))
+Gx_vars_quant<-quantile(Gx_vars, c(.1,.2,.3,.4,.5))
+Gx_vars_names<-names(which(Gx_vars > Gx_vars_quant[2]))
+Gx_DF_3_var<-Gx_DF_2_cor[,c("Phenotype",Gx_vars_names)]
+
+
+PGC_SCZ<-filter(Genesets_HD, Eclass=="PGC_SCZ")
+final_SCZ_probes<-Gx_DF_1_locHS[c(TRUE,colnames(Gx_DF_1_locHS)%in%PGC_SCZ$Gene_names)]
+#Diff expression List
+dim(final_SCZ_probes)
 
 
 
@@ -212,59 +262,207 @@ save(List_of_models, file=paste(output_dir,project_id,project_name,"_all_models"
 
 ```
 
-# Plotting
-```{r Plotting of results}
+#Configure
+```{r Define Cores and Seed}
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="all") ## Steve added sampling argument. READ!!
+
+#Define Metric to choose best model
+metric <- "Accuracy"
+
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","rf","parRF","svmLinear2","svmPoly","svmRadial","pcaNNet","avNNet","nnet","C5.0","elm","AdaBag")
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly")
+
+
+```
+
+# Machine Learning 1
+```{r Machine Learning}
+
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="final") ## Steve added sampling argument. READ!!
 #For saving files. 
 Sub_prefix = "_R1_"
-Plotting_prefix = paste(project_id,project_name,Sub_prefix, sep="") 
-
-#load ML data
-load(file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""))
-
-#Select functioning models
-modelID_fine<-c("glmnet","nb","svmPoly","svmRadial","rf","parRF","gbm","C5.0","pcaNNet","elm")
-modellist<-List_of_models[modelID_fine]
-
-#extract accuracy Models
-ml_resample<-resamples(modellist)
-Acc_results<-ml_resample$values[,grep("*Accuracy",colnames(ml_resample$values))]
-
-## Plot 
-
-#single point
-Accuracy_results<-sapply(Acc_results,mean)
-accuracy_plot<-as.data.frame(Accuracy_results)
-accuracy_plot<-as.data.frame(Accuracy_results)
-accuracy_plot$Algorithm<-row.names(accuracy_plot)
-
-s_title="Dotplot_comparing"
-f_title="Average accuracy of 5x3-fold cross validation for 14 Models"
-ggplot(accuracy_plot,
-  aes(x=Accuracy_results,y=Algorithm,color=Algorithm)) +
-  geom_point()+ 
-  ggtitle(f_title)
-ggsave(paste(figs_dir,Plotting_prefix,s_title,"_Free.png",sep=""))
+input_data=Gx_DF_1_locHS
+dim(input_data)
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
 
 
-results<-ml_resample
+#Machine Learning
+List_of_models<-list()
+for(i in 1:length(modelID)){
+  tryCatch({
+    print(modelID[i])
+    List_of_models[[modelID[i]]]<-"NA: Probable error"
+    set.seed(seed)
+    List_of_models[[modelID[i]]] <- train(Phenotype~., data=input_data, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    print(List_of_models[[modelID[i]]])
+    temp<-List_of_models[[modelID[i]]]
+    save(temp, file=paste(output_dir,project_id,project_name,Sub_prefix,"_",modelID[i],".rdata",sep=""), compress = T)    
+  }, 
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
 
-#all points
-Accuracy_results<-ml_resample$values[,grep("*Accuracy",colnames(ml_resample$values))]
-accuracy_plot<-Accuracy_results[,row.names(as.matrix(sort(sapply(Accuracy_results,mean),decreasing = F)))]
-accuracy_plot$Datasets<-c("RFE(GAP)")
-accuracy_plot2<-melt(accuracy_plot, id="Datasets")
-colnames(accuracy_plot2)<-c("GeneLists","Algorithm","Accuracy")
+save(List_of_models, file=paste(output_dir,project_id,project_name,Sub_prefix,"_all_models",".rdata",sep=""), compress = T)
 
-table(accuracy_plot2[,3])
-s_title="Dotplot_comparing_cv"
-f_title="Accuracy of 5x3-fold cross validation for 14 Models"
-ggplot(accuracy_plot2,
-  aes(x=Algorithm,y=Accuracy, colour = Algorithm)) +
-  geom_point() + 
-  geom_boxplot()+
-  coord_flip()+
-  ggtitle(f_title)
-ggsave(paste(figs_dir,Plotting_prefix,s_title,"_Free.png",sep=""))
+
+```
+# Machine Learning 2
+```{r Machine Learning}
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="final") ## Steve added sampling argument. READ!!
+#For saving files. 
+Sub_prefix = "_R2_"
+input_data=Gx_DF_2_cor
+dim(input_data)
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
+
+
+
+
+#Machine Learning
+List_of_models<-list()
+for(i in 1:length(modelID)){
+  tryCatch({
+    print(modelID[i])
+    List_of_models[[modelID[i]]]<-"NA: Probable error"
+    set.seed(seed)
+    List_of_models[[modelID[i]]] <- train(Phenotype~., data=input_data, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    print(List_of_models[[modelID[i]]])
+    temp<-List_of_models[[modelID[i]]]
+    save(temp, file=paste(output_dir,project_id,project_name,Sub_prefix,"_",modelID[i],".rdata",sep=""), compress = T)    
+  }, 
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+save(List_of_models, file=paste(output_dir,project_id,project_name,Sub_prefix,"_all_models",".rdata",sep=""), compress = T)
+
+```
+
+# Machine Learning 3
+```{r Machine Learning}
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="final") ## Steve added sampling argument. READ!!
+#For saving files. 
+Sub_prefix = "_R3_"
+input_data=Gx_DF_3_var
+dim(input_data)
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmRadial","rf","C5.0","elm","pcaNNet")
+
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmRadial","rf","C5.0","elm","pcaNNet")
+x=1
+List_of_models_tune<-list()
+List_of_models_tune[[modelID[x]]]<-"NA: Probable error"
+List_of_models_tune[[modelID[x]]]<- train(Phenotype~., data=input_data, method=modelID[x], metric=metric, preProc=c("center", "scale"),tuneLength = 10, trControl=control)
+print(List_of_models_tune[[modelID[x]]])
+x=x+1
+List_of_models_tune[[modelID[x]]]<-"NA: Probable error"
+List_of_models_tune[[modelID[x]]]<- train(Phenotype~., data=input_data, method=modelID[x], metric=metric, preProc=c("center", "scale"),tuneLength = 10, trControl=control)
+print(List_of_models_tune[[modelID[x]]])
+x=x+1
+List_of_models_tune[[modelID[x]]]<-"NA: Probable error"
+List_of_models_tune[[modelID[x]]]<- train(Phenotype~., data=input_data, method=modelID[x], metric=metric, preProc=c("center", "scale"),tuneLength = 10, trControl=control)
+print(List_of_models_tune[[modelID[x]]])
+
+
+
+
+#Machine Learning
+List_of_models<-list()
+for(i in 1:length(modelID)){
+  tryCatch({
+    print(modelID[i])
+    List_of_models[[modelID[i]]]<-"NA: Probable error"
+    set.seed(seed)
+    List_of_models[[modelID[i]]] <- train(Phenotype~., data=input_data, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    print(List_of_models[[modelID[i]]])
+    temp<-List_of_models[[modelID[i]]]
+    save(temp, file=paste(output_dir,project_id,project_name,Sub_prefix,"_",modelID[i],".rdata",sep=""), compress = T)    
+  }, 
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+save(List_of_models, file=paste(output_dir,project_id,project_name,Sub_prefix,"_all_models",".rdata",sep=""), compress = T)
+
+```
+
+
+# Machine Learning 4
+```{r Machine Learning}
+
+
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="final") ## Steve added sampling argument. READ!!
+#For saving files. 
+Sub_prefix = "_R4_"
+input_data=final_SCZ_probes
+dim(input_data)
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmRadial","rf","C5.0","elm","pcaNNet")
+
+
+
+#Machine Learning
+List_of_models<-list()
+for(i in 1:length(modelID)){
+  tryCatch({
+    print(modelID[i])
+    List_of_models[[modelID[i]]]<-"NA: Probable error"
+    set.seed(seed)
+    List_of_models[[modelID[i]]] <- train(Phenotype~., data=input_data, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    print(List_of_models[[modelID[i]]])
+    temp<-List_of_models[[modelID[i]]]
+    save(temp, file=paste(output_dir,project_id,project_name,Sub_prefix,"_",modelID[i],".rdata",sep=""), compress = T)    
+  }, 
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+save(List_of_models, file=paste(output_dir,project_id,project_name,Sub_prefix,"_all_models",".rdata",sep=""), compress = T)
+
+```
+
+
+# Randomized labels. 
+```{r Plotting of results}
+
+List_of_DFs<-list()
+randomN<-c(1:10)
+for (R in 1:10) {
+  set.seed(randomN[R])
+  input_data_R<-input_data
+  input_data_R[,1]<-sample(input_data[,1])
+  List_of_DFs[[R]]<-input_data_R
+}
+
+
+List_of_DFs[[R]]
+
+RNum<-1
+
+List_of_models2<-list()
+for(i in 1:length(modelID)){
+  tryCatch({
+    print(modelID[i])
+    List_of_models2[[modelID[i]]]<-"NA: Probable error"
+    set.seed(seed)
+    List_of_models2[[modelID[i]]] <- train(Phenotype~., data=List_of_DFs[[RNum]], method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    print(List_of_models2[[modelID[i]]])
+  }, 
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
 
 
 

@@ -68,6 +68,7 @@ set.seed(seed)
 # Feature selection
 ```{r feature selection}
 
+training_df
 #Define number of columns not corresponding to Probes (HAVE TO BE AT THE START of data)
 Non_Probes=26 
 
@@ -84,7 +85,7 @@ highlyCorrelated
 
 
 # remove highly correlated probes
-training_cor_df<-training_df[,-c(highlyCorrelated+Non_Probes)]
+training_cor_df<-training_df[,-c(highlyCorrelated+Non_Probes)]#+Non_probes adds X to each index from highly correlated. Important. 
 
 #Check dimensions
 dim(training_df)

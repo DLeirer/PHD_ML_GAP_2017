@@ -160,14 +160,41 @@ table(GAP_Fdata$LOC_HS_DROP)
 
 table(GAP_Fdata$TargetID%in%colnames(Gx_dejong)) #should all be true. 
 
-Gx_DF_input<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
+Gx_DF_1_locHS<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
 colnames(Gx_dejong)[1]<-"Phenotype"
 
-table(colnames(Gx_DF_input)%in%colnames(Gx_dejong)) #All equal?
+table(colnames(Gx_DF_1_locHS)%in%colnames(Gx_dejong)) #All equal?
 
 
 
+### Remove High correlation probes. 
+#make dataset of features that are not probes for backup and later use.
 
+
+cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
+  # find highly correlated probes
+  correlationMatrix <- cor(gene_exprs_DF)
+  # find attributes that are highly corrected (ideally >0.75)
+  findCorrelation(correlationMatrix, cutoff=cor_cutoff)
+
+}
+
+
+#ONLY KEEP PHENOTYPE
+Gx_DF_1_locHS[1:10,1:10]
+#find highly correlated probes set to 80 by default.
+highlyCorrelated<-cor_fun(Gx_DF_1_locHS[,-c(1)],cor_cutoff=0.8)
+highlyCorrelated
+
+
+# remove highly correlated probes
+Gx_DF_2_cor<-Gx_DF_1_locHS[,-c(highlyCorrelated+1)]##+1 is for phenotype col. Adds 1 to each number. 
+dim(Gx_DF_2_cor)
+dim(Gx_DF_1_locHS)
+#Low Variation Probes removed
+
+
+#Diff expression List
 
 ```
 
@@ -197,6 +224,8 @@ modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadi
 # Machine Learning
 ```{r Machine Learning}
 
+input_data=Gx_DF_1_locHS
+
 #Machine Learning
 List_of_models<-list()
 for(i in 1:length(modelID)){
@@ -204,7 +233,7 @@ for(i in 1:length(modelID)){
     print(modelID[i])
     List_of_models[[modelID[i]]]<-"NA: Probable error"
     set.seed(seed)
-    List_of_models[[modelID[i]]] <- train(Phenotype~., data=Gx_DF_input, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    List_of_models[[modelID[i]]] <- train(Phenotype~., data=input_data, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
     print(List_of_models[[modelID[i]]])
     temp<-List_of_models[[modelID[i]]]
     save(temp, file=paste(output_dir,project_id,project_name,"_",modelID[i],".rdata",sep=""), compress = T)    
@@ -276,11 +305,18 @@ ggsave(paste(figs_dir,Plotting_prefix,s_title,"_Free.png",sep=""))
 
 
 
+
 # Machine Learning
 ```{r Machine Learning}
 
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=5, repeats=3, sampling="down", savePredictions="final") ## Steve added sampling argument. READ!!
+#For saving files. 
+Sub_prefix = "_R2_"
+input_data=Gx_DF_2_cor
+dim(input_data)
+modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","AdaBag","AdaBoost.M1")
 
-modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","pcaNNet")
 
 #Machine Learning
 List_of_models<-list()
@@ -289,20 +325,126 @@ for(i in 1:length(modelID)){
     print(modelID[i])
     List_of_models[[modelID[i]]]<-"NA: Probable error"
     set.seed(seed)
-    List_of_models[[modelID[i]]] <- train(Phenotype~., data=Gx_DF_input, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    List_of_models[[modelID[i]]] <- train(Phenotype~., data=input_data, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
     print(List_of_models[[modelID[i]]])
     temp<-List_of_models[[modelID[i]]]
-    save(temp, file=paste(output_dir,project_id,project_name,"_",modelID[i],".rdata",sep=""), compress = T)    
+    save(temp, file=paste(output_dir,project_id,project_name,Sub_prefix,"_",modelID[i],".rdata",sep=""), compress = T)    
   }, 
   error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
 }
 
-save(List_of_models, file=paste(output_dir,project_id,project_name,"_all_models",".rdata",sep=""), compress = T)
+save(List_of_models, file=paste(output_dir,project_id,project_name,Sub_prefix,"_all_models",".rdata",sep=""), compress = T)
 
 ```
 
+# Tune
+```{r Tune}
+
+```
+
+# Ensemble
+```{r Ensemble}
+
+#set.seed(107)
+#inTrain <- createDataPartition(y = Sonar$Class, p = .75, list = FALSE)
+#training <- Sonar[ inTrain,]
+training <- expressionRFE
+#testing <- Sonar[-inTrain,]
+testing <- testing_df
+training[1:10,1:10]
+
+#Build Caret models
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+set.seed(seed)
+
+#Control for algorithms
+control <- trainControl(method="repeatedcv", number=3, repeats=2, sampling="down",classProbs = TRUE, savePredictions="final") ## Steve added sampling argument. READ!!
+control <- trainControl(method="repeatedcv", number=5, repeats=2, sampling="down",classProbs = TRUE,summaryFunction=twoClassSummary)
+
+modelID<-c("gbm","glmnet","nb","knn","rf","C5.0","pcaNNet")
+modelID<-c("gbm","glmnet","nb","knn","rf")
+
+#Define Metric to choose best model
+metric <- "ROC"
 
 
+List_of_models<-list()
+for(i in 1:length(modelID)){
+  tryCatch({
+    print(modelID[i])
+    List_of_models[[modelID[i]]]<-"NA: Probable error"
+    set.seed(seed)
+    List_of_models[[modelID[i]]] <- train(Phenotype~., data=training, method=modelID[i], metric=metric, preProc=c("center", "scale"), trControl=control)
+    print(List_of_models[[modelID[i]]])
+  }, 
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+}
+
+
+List_of_models
+
+
+predict_fit<-predict(gbmFit, newdata = testing_df)
+confusionMatrix(predict_fit, testing_df$Phenotype)
+
+
+
+#my_control <- trainControl(method="repeatedcv", number=5, repeats=2, sampling="down",summaryFunction=twoClassSummary)
+my_control <- trainControl(method="repeatedcv", number=5, repeats=2, sampling="down",classProbs = TRUE,summaryFunction=twoClassSummary,savePredictions="final")
+#Ensemble caret
+set.seed(seed)
+model_list <- caretList(Phenotype~., data=training, trControl=my_control,metric=metric, preProc=c("center", "scale"),methodList=c("knn","glmnet","rpart"))
+#check
+model_list
+p <- as.data.frame(predict(model_list, newdata=head(testing)))
+print(p)
+xyplot(resamples(model_list))
+modelCor(resamples(model_list))
+
+
+greedy_ensemble <- caretEnsemble(
+  model_list, 
+  metric="ROC",
+  trControl=trainControl(
+    number=2,
+    summaryFunction=twoClassSummary,
+    classProbs=TRUE
+  ))
+summary(greedy_ensemble)
+
+library("caTools")
+model_preds <- lapply(model_list, predict, newdata=testing, type="prob")
+model_preds <- lapply(model_preds, function(x) x[,"Control"])
+model_preds <- data.frame(model_preds)
+ens_preds <- predict(greedy_ensemble, newdata=testing, type="prob")
+model_preds$ensemble <- ens_preds
+caTools::colAUC(model_preds, testing$Phenotype)
+
+
+
+p <- as.data.frame(predict(model_list, newdata=head(testing)))
+print(p)
+
+glm_ensemble <- caretStack(
+  model_list,
+  method="glm",
+  metric="ROC",
+  trControl=trainControl(
+    method="boot",
+    number=10,
+    savePredictions="final",
+    classProbs=TRUE,
+    summaryFunction=twoClassSummary
+  )
+)
+model_preds2 <- model_preds
+model_preds2$ensemble <- predict(glm_ensemble, newdata=testing, type="prob")
+CF <- coef(glm_ensemble$ens_model$finalModel)[-1]
+colAUC(model_preds2, testing$Phenotype)
+```
 
 # Other
 ```{r other}

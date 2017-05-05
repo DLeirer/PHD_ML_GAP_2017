@@ -16,6 +16,18 @@ Create Machine learning models using GAP data.
 
 #Load Libraries
 ```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(plyr)
+library(dplyr)
+library(lubridate)
+library(doMC)
+library(caret)
+library(reshape)
+library(tableone)
+library(stargazer)
+library(mice)
+
 
 ```
 
@@ -30,51 +42,20 @@ Create Machine learning models using GAP data.
 
 #Define Directories
 ```{r Define directories}
-
+top_dir<-getwd()
+data_dir <-"./P0_Characterise/output/"
+data_dir0 <-"./data/"
+data_dejong_dir<-"./P00_Characterise_Dejong/output/"
+output_dir <-"./P51_GAP_2way/output/"
+figs_dir <-"./P51_GAP_2way/figs/"
 ```
 
 #Load Data
 ```{r Load data}
 
+load(file=paste(data_dejong_dir,"Dejong_reduced_Gx_data_and_pheno.RData",sep=""))
+load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
 
-
-
-#Data
-GAP
-
-#Process.
-Removal of LOC HS.
-
-
-
-```
-
-# Step 1: Split Data 
-```{r Define Cores and Seed}
-
-
-##### Variables
-Number_of_Splits <- 10
-Split_Percentage <- 0.70
-  
-##### Functions
-#for data partition
-GX_DF<-Gx_DF_3_var[,1:100]
-set.seed(Number_of_Splits)
-DataPartition_DF <- createDataPartition(GX_DF$Phenotype,times = Number_of_Splits,  p = Split_Percentage, list = F)
-
-
-##### get training or testing DF 
-if training
-training_df <- GX_DF[training_index,]
-else if testing
-testing_df <- GX_DF[-training_index,]
-else
-print error
-
-
-
-##### Clean Training DF. 
 
 #Reduce Gene expression GAP to mirror Dejong. 
 GAP_Fdata<-filter(GAP_Dejong_Full_Fdata,GAP_GAPDJ==TRUE)
@@ -84,54 +65,73 @@ GAP_Fdata <- GAP_Fdata %>%
   mutate(LOC_HS_DROP=ifelse( grepl("^LOC",TargetID),"DROP",
                        ifelse( grepl("^HS\\.",TargetID), "DROP","KEEP"))) 
 GAP_Fdata<-filter(GAP_Fdata,LOC_HS_DROP == "KEEP")
-table(GAP_Fdata$LOC_HS_DROP)
-
-
-table(GAP_Fdata$TargetID%in%colnames(Gx_dejong)) #should all be true. 
 
 Gx_DF_1_locHS<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
-colnames(Gx_dejong)[1]<-"Phenotype"
-
-table(colnames(Gx_DF_1_locHS)%in%colnames(Gx_dejong)) #All equal?
 
 
 
-### Remove High correlation probes. 
-#make dataset of features that are not probes for backup and later use.
+```
 
+# Step 1: Split Data 
+```{r Define Cores and Seed}
+############Step 1 Functions
+##### get training or testing DF 
+#Get train or test DF function
+f_train_test <- function (Data ,indexDF ,index ,Training = TRUE){
+  training_index <- DataPartition_DF[,index]  
+  if (Training == TRUE){
+    print("Training dataframe created")
+    training <- Data[training_index,]
+    return (training) 
+  }else{
+    print("Training dataframe created")
+    testing <- Data[-training_index,]
+    return (testing)
+  }
+}
 
+#Correlation Function
 cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
   # find highly correlated probes
   correlationMatrix <- cor(gene_exprs_DF)
   # find attributes that are highly corrected (ideally >0.75)
   findCorrelation(correlationMatrix, cutoff=cor_cutoff)
-
 }
 
 
-#ONLY KEEP PHENOTYPE
-Gx_DF_1_locHS[1:10,1:10]
-#find highly correlated probes set to 80 by default.
-highlyCorrelated<-cor_fun(Gx_DF_1_locHS[,-c(1)],cor_cutoff=0.75)
-highlyCorrelated
+##### Clean Training DF function. Correlation and variance.  
+f_train_clean <- function (train_df, cor_cutoff=0.75,low_variance_cut=0.1){
+  ### Remove High correlation probes. 
+  #make dataset of features that are not probes for backup and later use.
+  highlyCorrelated<-cor_fun(train_df[,-c(1)],cor_cutoff=cor_cutoff)
+  # remove highly correlated probes
+  train_df<-train_df[,-c(highlyCorrelated+1)]##+1 is for phenotype col. Adds 1 to each number. 
+  
+  #Low Variance Probes removed
+  Gx_vars<-apply(train_df[,c(-1)], 2, function(x) var(x,y = NULL, na.rm = FALSE, "everything"))
+  Gx_vars_quant<-quantile(Gx_vars, c(low_variance_cut))
+  Gx_vars_names<-names(which(Gx_vars > Gx_vars_quant[1]))
+  train_df<-train_df[,c("Phenotype",Gx_vars_names)]
+  return(train_df)
+}
 
 
-# remove highly correlated probes
-Gx_DF_2_cor<-Gx_DF_1_locHS[,-c(highlyCorrelated+1)]##+1 is for phenotype col. Adds 1 to each number. 
-dim(Gx_DF_2_cor)
-dim(Gx_DF_1_locHS)
+##### Variables
+Number_of_Splits <- 10 #Number of splits
+Split_Percentage <- 0.70 #Split of data
+GX_DF <- Gx_DF_1_locHS #Expression data with Phenotype as first column
+
+#for data partition
+set.seed(Number_of_Splits)
+DataPartition_DF <- createDataPartition(GX_DF$Phenotype,times = Number_of_Splits,  p = Split_Percentage, list = F)
 
 
-#Low Variance Probes removed
-Gx_vars<-apply(Gx_DF_2_cor[,c(-1)], 2, function(x) var(x,))
-Gx_vars_quant<-quantile(Gx_vars, c(.1,.2,.3,.4,.5))
-Gx_vars_names<-names(which(Gx_vars > Gx_vars_quant[2]))
-Gx_DF_3_var<-Gx_DF_2_cor[,c("Phenotype",Gx_vars_names)]
+#Create Training DF
+training_df<-f_train_test(GX_DF,DataPartition_DF,1,T)
+#Create Clean DF
+training_df_small<-f_train_clean(training_df,cor_cutoff = 0.75)
 
-dim(Gx_DF_1_locHS)
-dim(Gx_DF_2_cor)
-dim(Gx_DF_3_var)
-
+dim(training_df_small)
 
 
 ```
@@ -145,6 +145,33 @@ Low variation probes. 10% percent removal.
 Diff Expression list 
 Wrapper methods
 Recursive feature elimination. 5x3
+
+subsets <- c(50,100,150,200,250,300)
+
+
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+
+#set seed
+set.seed(seed)
+#set control parameters 
+control <- rfeControl(functions=rfFuncs, #Random Forrest based
+                      method="repeatedcv", #Repeated CV
+                      number=5, #10 folds
+                      repeats=3, #10 repeats
+                      verbose = FALSE)
+
+# run the RFE algorithm
+rfe_output <- rfe(gx_predictors, class_labels, sizes=subsets, rfeControl=control)
+rfe_output_prepro<-rfe_output
+rfe_output <- rfe(x=training_cor_df[,-1], y=class_labels, sizes=subsets, rfeControl=control)
+#Save output files
+save(rfe_output, rfe_output_prepro, file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""), compress = T)
+load(paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
+
+
 
 
 ```

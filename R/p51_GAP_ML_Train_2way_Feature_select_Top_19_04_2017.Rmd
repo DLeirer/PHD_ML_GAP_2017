@@ -190,7 +190,7 @@ dim(Gx_DF_1_locHS)
 
 
 #Low Variance Probes removed
-Gx_vars<-apply(Gx_DF_2_cor[,c(-1)], 2, function(x) var(x,))
+Gx_vars<-apply(Gx_DF_2_cor[1:10,c(-1)], 2, function(x) var(x,y = NULL, na.rm = FALSE, "everything"))
 Gx_vars_quant<-quantile(Gx_vars, c(.1,.2,.3,.4,.5))
 Gx_vars_names<-names(which(Gx_vars > Gx_vars_quant[2]))
 Gx_DF_3_var<-Gx_DF_2_cor[,c("Phenotype",Gx_vars_names)]

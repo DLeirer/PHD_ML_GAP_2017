@@ -27,12 +27,96 @@ library(reshape)
 library(tableone)
 library(stargazer)
 library(mice)
-
+library(caretEnsemble)
 
 ```
 
 #Functions
 ```{r define functions, tidy=TRUE}
+#function for Recursive feature elimination. Requires helper functions below. 
+f_rfe_tolist <- function (GX_DF, Resample_list, subsets, control, seed){
+  Resample_df<-Resample_list[["DataPartition"]]
+  n_repeats<-dim(Resample_df)[2]
+  #start loop
+  for (i in 1:n_repeats){
+    #print loop
+    print(paste("Resample ",i))
+    #Recursive feature elimination
+    #Create Training DF
+    train_df<-f_train_test(GX_DF,DataPartition_DF,i,T)
+    print(train_df[1:3,1:5])
+    #Create Clean DF
+    train_df_small<-f_train_clean(train_df,cor_cutoff = 0.75)
+    print("Final Train df Size")
+    print(dim(train_df_small))
+    print(train_df_small[1:3,1:5])
+    #Recursive Feature Elmination.
+    rfe_output<-f_rfe(train_df_small, subsets, control, seed)
+    #get predictors and plot add to lists. 
+    Resample_list$rfelist[[i]]<-predictors(rfe_output)
+    Resample_list$plottestlist[[i]]<-plot(rfe_output, type = c("g", "o"),col="green",main="Recursive Feature Elimination")
+    print("Recursive Feature Elminiation done and Added to list")
+  }
+  return(Resample_list)
+}
+
+
+
+#Get train or test DF function # helper function to f_rfe_tolist
+f_train_test <- function (Data ,indexDF ,index ,Training = TRUE){
+  training_index <- DataPartition_DF[,index]  
+  if (Training == TRUE){
+    print("Training dataframe created")
+    training <- Data[training_index,]
+    return (training) 
+  }else{
+    print("Testing dataframe created")
+    testing <- Data[-training_index,]
+    return (testing)
+  }
+}
+
+
+
+# Clean Training DF function. Correlation and variance.   # helper function to f_rfe_tolist
+f_train_clean <- function (train_df, cor_cutoff=0.75,low_variance_cut=0.1){
+  ### Remove High correlation probes. 
+  #make dataset of features that are not probes for backup and later use.
+  highlyCorrelated<-cor_fun(train_df[,-c(1)],cor_cutoff=cor_cutoff)
+  # remove highly correlated probes
+  train_df<-train_df[,-c(highlyCorrelated+1)]##+1 is for phenotype col. Adds 1 to each number. 
+  
+  #Low Variance Probes removed
+  Gx_vars<-apply(train_df[,c(-1)], 2, function(x) var(x,y = NULL, na.rm = FALSE, "everything"))
+  Gx_vars_quant<-quantile(Gx_vars, c(low_variance_cut))
+  Gx_vars_names<-names(which(Gx_vars > Gx_vars_quant[1]))
+  train_df<-train_df[,c("Phenotype",Gx_vars_names)]
+  return(train_df)
+}
+
+
+#Correlation Function # helper function to f_train_clean
+cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
+  # find highly correlated probes
+  correlationMatrix <- cor(gene_exprs_DF)
+  # find attributes that are highly corrected (ideally >0.75)
+  findCorrelation(correlationMatrix, cutoff=cor_cutoff)
+}
+
+
+
+#Recursive feature elimination function. # helper function to f_rfe_tolist
+f_rfe <- function (train_df_small, subsets, control, seed){
+  ### Define Class Labels
+  class_labels <- droplevels(as.factor(train_df_small[,1]))
+  ## Define Predictors
+  gx_predictors=train_df_small[,-1]
+  #set seed
+  set.seed(seed)
+  # run the RFE algorithm
+  rfe_output <- rfe(gx_predictors, class_labels, sizes=subsets, rfeControl=control)
+  return(rfe_output)
+}
 
 
 
@@ -75,47 +159,6 @@ Gx_DF_1_locHS<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
 # Step 1: Split Data 
 ```{r Define Cores and Seed}
 ############Step 1 Functions
-##### get training or testing DF 
-#Get train or test DF function
-f_train_test <- function (Data ,indexDF ,index ,Training = TRUE){
-  training_index <- DataPartition_DF[,index]  
-  if (Training == TRUE){
-    print("Training dataframe created")
-    training <- Data[training_index,]
-    return (training) 
-  }else{
-    print("Training dataframe created")
-    testing <- Data[-training_index,]
-    return (testing)
-  }
-}
-
-#Correlation Function
-cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
-  # find highly correlated probes
-  correlationMatrix <- cor(gene_exprs_DF)
-  # find attributes that are highly corrected (ideally >0.75)
-  findCorrelation(correlationMatrix, cutoff=cor_cutoff)
-}
-
-
-##### Clean Training DF function. Correlation and variance.  
-f_train_clean <- function (train_df, cor_cutoff=0.75,low_variance_cut=0.1){
-  ### Remove High correlation probes. 
-  #make dataset of features that are not probes for backup and later use.
-  highlyCorrelated<-cor_fun(train_df[,-c(1)],cor_cutoff=cor_cutoff)
-  # remove highly correlated probes
-  train_df<-train_df[,-c(highlyCorrelated+1)]##+1 is for phenotype col. Adds 1 to each number. 
-  
-  #Low Variance Probes removed
-  Gx_vars<-apply(train_df[,c(-1)], 2, function(x) var(x,y = NULL, na.rm = FALSE, "everything"))
-  Gx_vars_quant<-quantile(Gx_vars, c(low_variance_cut))
-  Gx_vars_names<-names(which(Gx_vars > Gx_vars_quant[1]))
-  train_df<-train_df[,c("Phenotype",Gx_vars_names)]
-  return(train_df)
-}
-
-
 ##### Variables
 Number_of_Splits <- 10 #Number of splits
 Split_Percentage <- 0.70 #Split of data
@@ -126,51 +169,41 @@ set.seed(Number_of_Splits)
 DataPartition_DF <- createDataPartition(GX_DF$Phenotype,times = Number_of_Splits,  p = Split_Percentage, list = F)
 
 
-#Create Training DF
-training_df<-f_train_test(GX_DF,DataPartition_DF,1,T)
-#Create Clean DF
-training_df_small<-f_train_clean(training_df,cor_cutoff = 0.75)
-
-dim(training_df_small)
-
-
 ```
 
 # Step 2: Feature Selection 
 ```{r Feature Selection}
 
-Filter methods
-Removal of  highly correlated probes. 80%
-Low variation probes. 10% percent removal.
-Diff Expression list 
-Wrapper methods
-Recursive feature elimination. 5x3
-
-subsets <- c(50,100,150,200,250,300)
-
-
+#Variables for Step 2
 #Allow 8 Cores
 registerDoMC(cores = 8) 
 #Set Seed
 seed = 7
-
-#set seed
-set.seed(seed)
+#set number of subsets to test
+subsets <- c(1:30)*25
+#subsets <- c(1:3)*25
 #set control parameters 
 control <- rfeControl(functions=rfFuncs, #Random Forrest based
                       method="repeatedcv", #Repeated CV
-                      number=5, #10 folds
-                      repeats=3, #10 repeats
+                      number=8, #10 folds
+                      repeats=5, #10 repeats
                       verbose = FALSE)
 
-# run the RFE algorithm
-rfe_output <- rfe(gx_predictors, class_labels, sizes=subsets, rfeControl=control)
-rfe_output_prepro<-rfe_output
-rfe_output <- rfe(x=training_cor_df[,-1], y=class_labels, sizes=subsets, rfeControl=control)
-#Save output files
-save(rfe_output, rfe_output_prepro, file=paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""), compress = T)
-load(paste(P1_output_dir,"RFE_model_results_hypothesis_free_data.Rdata",sep=""))
 
+#Create output list object. 
+Resample_list<-list()
+Resample_list[["DataPartition"]]<-DataPartition_DF[,1:2]
+Resample_list[["rfelist"]]<-list()
+Resample_list[["plottestlist"]]<-list()
+
+
+
+
+#Run Feature elimination. 
+Resample_list_results<-f_rfe_tolist(GX_DF, Resample_list, subsets, control, seed)
+Resample_list_results
+
+#save list
 
 
 
@@ -187,6 +220,76 @@ Massivivly increasing grid search. 3-20 per parameter?
 Ensembles.
 Find models that are uncorrelated in predictions but accurate.
 Linear model to combine maximum 3 models. 
+
+
+#Variables
+my_control <- trainControl(method="repeatedcv", number=5, repeats=2, sampling="down",classProbs = TRUE,summaryFunction=twoClassSummary,savePredictions="final")
+ML_list <- c("glmnet","rpart")
+seed <- 7
+#Define Metric to choose best model
+metric <- "ROC"
+
+x=1
+#get train DF
+train_ensemble_df<-f_train_test(GX_DF,Resample_list_results$DataPartition,x,T)
+#subset to predictors
+train_ensemble_df<-train_ensemble_df[,c("Phenotype",Resample_list_results$rfelist[[x]])]
+colnames(train_ensemble_df)
+train_df_test[1:20,1:3]
+
+
+
+
+#Ensemble caret
+set.seed(seed)
+model_list <- caretList(Phenotype~., data=train_ensemble_df, trControl=my_control,metric=metric, preProc=c("center", "scale"),methodList=ML_list)
+#check
+model_list
+
+model_list_big <- caretList(
+  Phenotype~., data=train_ensemble_df,
+  trControl=my_control,
+  preProc=c("center", "scale"),
+  metric="ROC",
+  methodList=c("glm", "rpart"),
+  tuneList=list(
+    rf=caretModelSpec(method="rf", tuneGrid=data.frame(.mtry=10), preProcess="pca"),
+    glmnet=caretModelSpec(method="glmnet", tuneLength=3)
+  )
+)
+
+model_list<-model_list_big
+
+#define test data
+testing<-f_train_test(GX_DF,Resample_list_results$DataPartition,x,F)
+
+
+#Predict in test
+p <- as.data.frame(predict(model_list, newdata=head(testing)))
+print(p)
+xyplot(resamples(model_list))
+modelCor(resamples(model_list))
+
+#Create models
+greedy_ensemble <- caretEnsemble(
+  model_list, 
+  metric="ROC",
+  trControl=trainControl(
+    number=2,
+    summaryFunction=twoClassSummary,
+    classProbs=TRUE
+  ))
+summary(greedy_ensemble)
+
+
+library("caTools")
+model_preds <- lapply(model_list, predict, newdata=testing, type="prob")
+model_preds <- lapply(model_preds, function(x) x[,"Control"])
+model_preds <- data.frame(model_preds)
+ens_preds <- predict(greedy_ensemble, newdata=testing, type="prob")
+model_preds$ensemble <- ens_preds
+caTools::colAUC(model_preds, testing$Phenotype)
+
 
 ```
 

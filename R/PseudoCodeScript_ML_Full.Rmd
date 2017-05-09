@@ -192,7 +192,7 @@ control <- rfeControl(functions=rfFuncs, #Random Forrest based
 
 #Create output list object. 
 Resample_list<-list()
-Resample_list[["DataPartition"]]<-DataPartition_DF[,1:2]
+Resample_list[["DataPartition"]]<-DataPartition_DF
 Resample_list[["rfelist"]]<-list()
 Resample_list[["plottestlist"]]<-list()
 

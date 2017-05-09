@@ -185,8 +185,8 @@ subsets <- c(1:30)*25
 #set control parameters 
 control <- rfeControl(functions=rfFuncs, #Random Forrest based
                       method="repeatedcv", #Repeated CV
-                      number=8, #10 folds
-                      repeats=5, #10 repeats
+                      number=7, #10 folds
+                      repeats=7, #10 repeats
                       verbose = FALSE)
 
 

@@ -64,7 +64,7 @@ f_rfe_tolist <- function (GX_DF, Resample_list, subsets, control, seed){
 
 #Get train or test DF function # helper function to f_rfe_tolist
 f_train_test <- function (Data ,indexDF ,index ,Training = TRUE){
-  training_index <- DataPartition_DF[,index]  
+  training_index <- indexDF[,index]  
   if (Training == TRUE){
     print("Training dataframe created")
     training <- Data[training_index,]
@@ -79,7 +79,7 @@ f_train_test <- function (Data ,indexDF ,index ,Training = TRUE){
 
 
 # Clean Training DF function. Correlation and variance.   # helper function to f_rfe_tolist
-f_train_clean <- function (train_df, cor_cutoff=0.75,low_variance_cut=0.1){
+f_train_clean <- function (train_df, cor_cutoff=0.75,low_variance_cut=0.25){
   ### Remove High correlation probes. 
   #make dataset of features that are not probes for backup and later use.
   highlyCorrelated<-cor_fun(train_df[,-c(1)],cor_cutoff=cor_cutoff)
@@ -96,7 +96,7 @@ f_train_clean <- function (train_df, cor_cutoff=0.75,low_variance_cut=0.1){
 
 
 #Correlation Function # helper function to f_train_clean
-cor_fun<- function(gene_exprs_DF,cor_cutoff=0.8) {
+cor_fun<- function(gene_exprs_DF,cor_cutoff=0.75) {
   # find highly correlated probes
   correlationMatrix <- cor(gene_exprs_DF)
   # find attributes that are highly corrected (ideally >0.75)
@@ -130,13 +130,14 @@ top_dir<-getwd()
 data_dir <-"./P0_Characterise/output/"
 data_dir0 <-"./data/"
 data_dejong_dir<-"./P00_Characterise_Dejong/output/"
-output_dir <-"./P51_GAP_2way/output/"
-figs_dir <-"./P51_GAP_2way/figs/"
+output_dir <-"./P61_GAP_2way/output/"
+figs_dir <-"./P61_GAP_2way/figs/"
 ```
 
 #Load Data
 ```{r Load data}
 
+#Load
 load(file=paste(data_dejong_dir,"Dejong_reduced_Gx_data_and_pheno.RData",sep=""))
 load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
 
@@ -150,7 +151,8 @@ GAP_Fdata <- GAP_Fdata %>%
                        ifelse( grepl("^HS\\.",TargetID), "DROP","KEEP"))) 
 GAP_Fdata<-filter(GAP_Fdata,LOC_HS_DROP == "KEEP")
 
-Gx_DF_1_locHS<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
+#Create Dataframe
+GX_DF<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)] #Expression data with Phenotype as first column
 
 
 
@@ -162,13 +164,18 @@ Gx_DF_1_locHS<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)]
 ##### Variables
 Number_of_Splits <- 10 #Number of splits
 Split_Percentage <- 0.70 #Split of data
-GX_DF <- Gx_DF_1_locHS #Expression data with Phenotype as first column
+project_id = "p51_"
+project_name = "GAP_Train_2way"
+Sub_prefix = "_Step2_"
+
 
 #for data partition
 set.seed(Number_of_Splits)
 DataPartition_DF <- createDataPartition(GX_DF$Phenotype,times = Number_of_Splits,  p = Split_Percentage, list = F)
 
 
+?createDataPartition
+?createMultiFolds
 ```
 
 # Step 2: Feature Selection 
@@ -184,11 +191,10 @@ subsets <- c(1:30)*25
 #subsets <- c(1:3)*25
 #set control parameters 
 control <- rfeControl(functions=rfFuncs, #Random Forrest based
-                      method="repeatedcv", #Repeated CV
-                      number=7, #10 folds
-                      repeats=7, #10 repeats
+                      method="bootstrap", #Repeated CV
+                      number=50, #10 folds
+                      #repeats=7, #10 repeats
                       verbose = FALSE)
-
 
 #Create output list object. 
 Resample_list<-list()
@@ -196,16 +202,16 @@ Resample_list[["DataPartition"]]<-DataPartition_DF
 Resample_list[["rfelist"]]<-list()
 Resample_list[["plottestlist"]]<-list()
 
-
-
-
 #Run Feature elimination. 
 Resample_list_results<-f_rfe_tolist(GX_DF, Resample_list, subsets, control, seed)
 Resample_list_results
 
 #save list
+save(Resample_list_results, file=paste(output_dir,project_id,project_name,Sub_prefix,"_Resample_List",".rdata",sep=""), compress = T)
+#load
+load(file=paste(output_dir,project_id,project_name,Sub_prefix,"_Resample_List",".rdata",sep=""))
 
-
+Resample_list_results
 
 ```
 
@@ -223,29 +229,175 @@ Linear model to combine maximum 3 models.
 
 
 #Variables
-my_control <- trainControl(method="repeatedcv", number=5, repeats=2, sampling="down",classProbs = TRUE,summaryFunction=twoClassSummary,savePredictions="final")
-ML_list <- c("glmnet","rpart")
-seed <- 7
+
+#Define Seed
+seed <- 10
+#set.seed(seed)
+#index=createResample(train_ensemble_df$Phenotype, 25)
+#my_control <- trainControl(method="repeatedcv", number=5, repeats=2,index=, classProbs = TRUE,summaryFunction=twoClassSummary,savePredictions="final")
+
+
+ML_list <- c("glmnet","rf")
+#ML_list <- c("glmnet","svmPoly","rf")
+#modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","xgbTree")
+ML_list2<-list(
+    svmLinear2=caretModelSpec(method="svmLinear2", tuneLength=2),
+    glmnet=caretModelSpec(method="glmnet",tuneLength=3),
+    rf=caretModelSpec(method="rf", tuneGrid=expand.grid(.mtry=(1:4)))
+)
+
 #Define Metric to choose best model
 metric <- "ROC"
 
+# 1. function for train ensemble df. 
+f_train_ensemble <- function (GX_Data,Resample_list,index){
+  #Get Train DF
+  train_ensemble_df<-f_train_test(GX_Data,Resample_list_results$DataPartition,index,T)
+  #subset to predictors
+  train_ensemble_df<-train_ensemble_df[,c("Phenotype",Resample_list$rfelist[[index]])]
+  return (train_ensemble_df)
+}
+
 x=1
-#get train DF
-train_ensemble_df<-f_train_test(GX_DF,Resample_list_results$DataPartition,x,T)
-#subset to predictors
-train_ensemble_df<-train_ensemble_df[,c("Phenotype",Resample_list_results$rfelist[[x]])]
-colnames(train_ensemble_df)
-train_df_test[1:20,1:3]
 
 
 
 
+# 2. function for caret list. Machine Learning.
+f_caret_list_ML <- function (GX_train,boot_n){
+  
+  #set seed
+  set.seed(seed)
+  #define indices
+  index=createResample(GX_train$Phenotype, boot_n)
+  print(index)
+  #set control
+  my_control <- trainControl(method="boot", 
+                             number=boot_n,
+                             index=index,
+                             classProbs = TRUE,
+                             summaryFunction=twoClassSummary,
+                             savePredictions="final",
+                             preProc=c("center", "scale"))
+  
+  #set seed
+  set.seed(seed)
+  #Machine learning Cart List. 
+  return(caretList(Phenotype~., 
+                    data=GX_train, 
+                    trControl=my_control,
+                    metric=metric,
+                    tuneList=ML_list2,
+                    continue_on_fail=T))
+}
+
+
+# 3. function for caret stack. Blend Meta models. 
+
+# 4. Meta function looping and saving everything appropriatly. 
+
+
+#set bootstrap iterations
+boot_n = 10
+
+
+#get train ensemble df
+train_ensemble_df<-f_train_ensemble(GX_DF,Resample_list_results,x)
+
+#Machine learning
+ML_caret_list<-f_caret_list_ML(train_ensemble_df,boot_n)
+
+model_list=ML_caret_list
+###save caret list
+#define test data
+testing<-f_train_test(GX_DF,Resample_list_results$DataPartition,x,F)
+
+# Output data caret list. 
+test<-list()
+test[["gx_testing"]] <- testing[1:2]
+test[["caret_list"]]<- resamples(model_list)
+test[["caret_list_model_preds"]] <- lapply(model_list, predict, newdata=testing)
+test[["splom"]]<-splom(resamples(model_list))
+test[["modelcor"]]<-modelCor(resamples(model_list))
+
+
+
+#save list as resample 1
+
+#caret stack
+greedy_ensemble <- caretEnsemble(
+  model_list, 
+  metric="ROC",
+  trControl=trainControl(
+    number=2,
+    summaryFunction=twoClassSummary,
+    classProbs=TRUE
+  ))
+summary(greedy_ensemble)
+
+model_preds <- lapply(model_list, predict, newdata=testing, type="prob")
+model_preds <- lapply(model_preds, function(x) x[,"Control"])
+model_preds <- data.frame(model_preds)
+ens_preds <- predict(greedy_ensemble, newdata=testing, type="prob")
+model_preds$ensemble <- ens_preds
+caTools::colAUC(model_preds, testing$Phenotype)
+
+
+#save caret stack
+gbm_ensemble <- caretStack(
+  model_list,
+  method="gbm",
+  verbose=FALSE,
+  tuneLength=15,
+  metric="ROC",
+  trControl=trainControl(
+    method="boot",
+    number=25,
+    savePredictions="final",
+    classProbs=TRUE,
+    summaryFunction=twoClassSummary
+  )
+)
+model_preds3 <- model_preds
+model_preds3$ensemble <- predict(gbm_ensemble, newdata=testing, type="prob")
+caTools::colAUC(model_preds3, testing$Phenotype)
+
+table(testing$Phenotype)
+44+39
+83/100*67
+
+####dejong
+
+#test caret list in dejong
+
+#test caret stack in dejong
+
+
+
+```
+
+
+# Step 4: Outputs
+```{r Outputs}
+
+Output:
+Plots of Models
+Performance
+Tables for latex
+
+
+```
+
+
+##############################################################
+# Code Snippets tried.
+```{r Graveyard}
 #Ensemble caret
 set.seed(seed)
-model_list <- caretList(Phenotype~., data=train_ensemble_df, trControl=my_control,metric=metric, preProc=c("center", "scale"),methodList=ML_list)
+model_list <- caretList(Phenotype~., data=train_ensemble_df, trControl=my_control,metric=metric, preProc=c("center", "scale"),methodList=ML_list,continue_on_fail=T)
 #check
 model_list
-
+?caretList
 model_list_big <- caretList(
   Phenotype~., data=train_ensemble_df,
   trControl=my_control,
@@ -265,10 +417,13 @@ testing<-f_train_test(GX_DF,Resample_list_results$DataPartition,x,F)
 
 
 #Predict in test
-p <- as.data.frame(predict(model_list, newdata=head(testing)))
+p <- as.data.frame(predict(model_list, newdata=testing))
 print(p)
-xyplot(resamples(model_list))
-modelCor(resamples(model_list))
+model_resamples<-resamples(model_list)
+xyplot(model_resamples)
+splom(model_resamples)
+modelCor(model_resamples)
+
 
 #Create models
 greedy_ensemble <- caretEnsemble(
@@ -290,17 +445,87 @@ ens_preds <- predict(greedy_ensemble, newdata=testing, type="prob")
 model_preds$ensemble <- ens_preds
 caTools::colAUC(model_preds, testing$Phenotype)
 
+model_preds <- lapply(model_list, predict, newdata=testing)
+
+
+#Caret Ensemble 
+glm_ensemble <- caretStack(
+  model_list,
+  method="glm",
+  metric="ROC",
+  trControl=trainControl(
+    method="boot",
+    number=10,
+    savePredictions="final",
+    classProbs=TRUE,
+    summaryFunction=twoClassSummary
+  )
+)
+model_preds2 <- model_preds
+model_preds2$ensemble <- predict(glm_ensemble, newdata=testing, type="prob")
+CF <- coef(glm_ensemble$ens_model$finalModel)[-1]
+colAUC(model_preds2, testing$Phenotype)
+
+
+model_list[[-c("nb","knn","rf","C5.0")]]
+class(model_list)
+class(model_list[-c(1,3:4,6:7)])
+is.caretList(model_list)
+class(model_list[1:4])
+
+?caretStack
+
+gbm_ensemble <- caretStack(
+  model_list,
+  method="gbm",
+  verbose=FALSE,
+  tuneLength=15,
+  metric="ROC",
+  trControl=trainControl(
+    method="boot",
+    number=25,
+    savePredictions="final",
+    classProbs=TRUE,
+    summaryFunction=twoClassSummary
+  )
+)
+model_preds3 <- model_preds
+model_preds3$ensemble <- predict(gbm_ensemble, newdata=testing, type="prob")
+caTools::colAUC(model_preds3, testing$Phenotype)
+
+
+gbm_ensemble <- caretStack(
+  model_list,
+  method="glmnet",
+  verbose=FALSE,
+  tuneLength=10,
+  metric="ROC",
+  trControl=trainControl(
+    method="boot",
+    number=50,
+    savePredictions="final",
+    classProbs=TRUE,
+    summaryFunction=twoClassSummary
+  )
+)
+
+model_preds3 <- model_preds
+model_preds3$ensemble <- predict(gbm_ensemble, newdata=testing, type="prob")
+colAUC(model_preds3, testing$Phenotype)
+New<-list()
+New[["GLM"]]<-glm_ensemble
+New[["GBM"]]<-gbm_ensemble
+
+
+
+model_preds3$ensemble <- predict(New$GLM, newdata=testing, type="prob")
 
 ```
 
 
-# Step 4: Outputs
-```{r Outputs}
-
-Output:
-Plots of Models
-Performance
-Tables for latex
 
 
-```
+
+
+
+

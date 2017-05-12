@@ -118,7 +118,144 @@ f_rfe <- function (train_df_small, subsets, control, seed){
   return(rfe_output)
 }
 
+###########   Functions for machine learning ############################################################
 
+# 1. function for train ensemble df. 
+f_train_ensemble <- function (GX_Data,Resample_list,index){
+  #Get Train DF
+  train_ensemble_df<-f_train_test(GX_Data,Resample_list_results$DataPartition,index,T)
+  #subset to predictors
+  train_ensemble_df<-train_ensemble_df[,c("Phenotype",Resample_list$rfelist[[index]])]
+  return (train_ensemble_df)
+}
+
+
+
+# 2. function for caret list. Machine Learning.
+f_caret_list_ML <- function (GX_train,boot_n){
+  
+  #set seed
+  set.seed(seed)
+  #define indices
+  index=createResample(GX_train$Phenotype, boot_n)
+  print(index)
+  #set control
+  my_control <- trainControl(method="boot", 
+                             number=boot_n,
+                             index=index,
+                             classProbs = TRUE,
+                             summaryFunction=twoClassSummary,
+                             savePredictions="final",
+                             preProc=c("center", "scale"),
+                             sampling="down")
+  
+  #set seed
+  set.seed(seed)
+  #Machine learning Cart List. 
+  return(caretList(Phenotype~., 
+                    data=GX_train, 
+                    trControl=my_control,
+                    metric=metric,
+                    tuneList=ML_list2,
+                    continue_on_fail=T))
+}
+
+
+# 3. function for caret stack. Blend Meta models. 
+#Caret stack function
+f_run_caret_stack <- function (model_list,ensemble_method="gbm",ensemble_tune=10){
+  #save caret stack
+  return(caretStack(
+    model_list,
+    method=ensemble_method,
+    verbose=FALSE,
+    tuneLength=ensemble_tune,
+    metric="ROC",
+    trControl=trainControl(
+      method="boot",
+      number=25,
+      savePredictions="final",
+      classProbs=TRUE,
+      summaryFunction=twoClassSummary)
+    )
+  )
+}
+
+# 4. get caret list and stack results
+f_get_caret_stack_results <- function (caret_list_data,ensemble_data,test_df,probability=TRUE,Pheno="Control"){
+  if (probability == TRUE){
+    print("creating probability df")
+    model_predi <- lapply(caret_list_data, predict, newdata=test_df, type="prob")
+    model_predi <- lapply(model_predi, function(x) x[,Pheno])
+    model_predi <- data.frame(model_predi)
+    model_predi$ensemble <- predict(ensemble_data, newdata=test_df, type="prob")
+    return(model_predi)
+  }else{
+    print("creating categorical df")
+    model_predi <- lapply(caret_list_data, predict, newdata=test_df)
+    model_predi <- data.frame(model_predi)
+    model_predi$ensemble <- predict(ensemble_data, newdata=test_df)
+    model_predi$Phenotype<-test_df[,1]
+    return (model_predi)
+  }
+}
+
+f_save_results_1 <- function (results_resample,model_list=model_list,test_df,Sub_prefix=Sub_prefix){
+  results_resample[["gx_testing"]] <- test_df
+  results_resample[["caret_list"]]<- resamples(model_list)
+  results_resample[["caret_list_model_preds"]] <- lapply(model_list, predict, newdata=test_df)
+  results_resample[["splom"]]<-splom(resamples(model_list))
+  results_resample[["modelcor"]]<-modelCor(resamples(model_list))
+  #save list for top level resample (initial train test split)
+  save(results_resample, file=paste(output_dir,project_id,project_name,Sub_prefix,top_split,".rdata",sep=""), compress = T)
+  return(results_resample)
+}
+
+
+f_save_results_2 <- function (results_resample,model_list=model_list,test_df,ensemble_model,Sub_prefix){
+  results_resample[["ensemble_full"]]<-ensemble_model #save ensemble
+  results_resample[["ensemble_summary"]]<-summary(ensemble_model) #save ensemble categoical
+  results_resample[["ensemble_model_preds_cat"]]<-f_get_caret_stack_results(model_list,ensemble_model,test_df,probability = F)
+  model_preds<-f_get_caret_stack_results(model_list,ensemble_model,test_df,probability = T) 
+  results_resample[["ensemble_model_preds_probability"]]<-model_preds #save model preds probability
+  results_resample[["ensemble_test_performance"]]<-caTools::colAUC(model_preds, test_df$Phenotype) #save comparision
+  #save results
+  save(results_resample, file=paste(output_dir,project_id,project_name,Sub_prefix,top_split,".rdata",sep=""), compress = T)
+  return(results_resample)
+}
+
+# 5 function drawing on 1-4
+#Function creating models and blend
+f_caret_list_ensemble <- function (GX_DF=GX_DF,Resample_list_results=Resample_list_results,top_split=top_split,boot_n=boot_n,fold=x){
+
+  #get train ensemble df
+  train_ensemble_df<-f_train_ensemble(GX_DF,Resample_list_results,x)
+
+  #Machine learning
+  set.seed(seed)
+  model_list<-f_caret_list_ML(train_ensemble_df,boot_n)  
+  print(model_list)
+  print(paste("Caret_list for fold",fold,"done.",sep=" "))
+  ###save caret list
+  #define test data
+  testing<-f_train_test(GX_DF,Resample_list_results$DataPartition,x,F)
+
+  # Output data caret list. 
+  #save initial results
+  results_output<-list()
+  results_output<-f_save_results_1(results_output,model_list,test_df=testing,Sub_prefix)
+  print(paste("Caret_list for fold",fold,"saved.",sep=" "))
+  
+  #create ensemble
+  set.seed(seed)  
+  ensemble_final<-f_run_caret_stack(model_list)
+  print(paste("Caret_stack for fold",fold,"done.",sep=" "))  
+
+  #create results output
+  results<-f_save_results_2(results_output,model_list,test_df=testing,ensemble_final,Sub_prefix)
+  print(paste("Caret_stack for fold",fold,"saved.",sep=" "))  
+  return(results)
+}
 
 
 ```
@@ -158,8 +295,17 @@ GX_DF<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)] #Expression data with Pheno
 
 ```
 
-# Step 1: Split Data 
+
+# Settings
 ```{r Define Cores and Seed}
+#Allow 8 Cores
+registerDoMC(cores = 8) 
+#Set Seed
+seed = 7
+```
+
+# Step 1: Split Data 
+```{r split data}
 ############Step 1 Functions
 ##### Variables
 Number_of_Splits <- 10 #Number of splits
@@ -173,27 +319,20 @@ Sub_prefix = "_Step2_"
 set.seed(Number_of_Splits)
 DataPartition_DF <- createDataPartition(GX_DF$Phenotype,times = Number_of_Splits,  p = Split_Percentage, list = F)
 
-
-?createDataPartition
-?createMultiFolds
 ```
 
 # Step 2: Feature Selection 
 ```{r Feature Selection}
 
 #Variables for Step 2
-#Allow 8 Cores
-registerDoMC(cores = 8) 
-#Set Seed
-seed = 7
 #set number of subsets to test
 subsets <- c(1:30)*25
 #subsets <- c(1:3)*25
 #set control parameters 
 control <- rfeControl(functions=rfFuncs, #Random Forrest based
-                      method="bootstrap", #Repeated CV
+                      method="boot", #Repeated CV
                       number=50, #10 folds
-                      #repeats=7, #10 repeats
+                      #repeats=40, #10 repeats
                       verbose = FALSE)
 
 #Create output list object. 
@@ -232,139 +371,31 @@ Linear model to combine maximum 3 models.
 
 #Define Seed
 seed <- 10
-#set.seed(seed)
-#index=createResample(train_ensemble_df$Phenotype, 25)
-#my_control <- trainControl(method="repeatedcv", number=5, repeats=2,index=, classProbs = TRUE,summaryFunction=twoClassSummary,savePredictions="final")
-
-
-ML_list <- c("glmnet","rf")
-#ML_list <- c("glmnet","svmPoly","rf")
 #modelID<-c("lda","glm","gbm","glmnet","nb","knn","svmLinear2","svmPoly","svmRadial","rf","C5.0","parRF","elm","nnet","avNNet","pcaNNet","xgbTree")
 ML_list2<-list(
-    svmLinear2=caretModelSpec(method="svmLinear2", tuneLength=2),
+    #svmLinear2=caretModelSpec(method="svmLinear2", tuneLength=2),
     glmnet=caretModelSpec(method="glmnet",tuneLength=3),
     rf=caretModelSpec(method="rf", tuneGrid=expand.grid(.mtry=(1:4)))
 )
 
 #Define Metric to choose best model
-metric <- "ROC"
-
-# 1. function for train ensemble df. 
-f_train_ensemble <- function (GX_Data,Resample_list,index){
-  #Get Train DF
-  train_ensemble_df<-f_train_test(GX_Data,Resample_list_results$DataPartition,index,T)
-  #subset to predictors
-  train_ensemble_df<-train_ensemble_df[,c("Phenotype",Resample_list$rfelist[[index]])]
-  return (train_ensemble_df)
-}
-
-x=1
-
-
-
-
-# 2. function for caret list. Machine Learning.
-f_caret_list_ML <- function (GX_train,boot_n){
-  
-  #set seed
-  set.seed(seed)
-  #define indices
-  index=createResample(GX_train$Phenotype, boot_n)
-  print(index)
-  #set control
-  my_control <- trainControl(method="boot", 
-                             number=boot_n,
-                             index=index,
-                             classProbs = TRUE,
-                             summaryFunction=twoClassSummary,
-                             savePredictions="final",
-                             preProc=c("center", "scale"))
-  
-  #set seed
-  set.seed(seed)
-  #Machine learning Cart List. 
-  return(caretList(Phenotype~., 
-                    data=GX_train, 
-                    trControl=my_control,
-                    metric=metric,
-                    tuneList=ML_list2,
-                    continue_on_fail=T))
-}
-
-
-# 3. function for caret stack. Blend Meta models. 
-
+metric = "ROC"
 # 4. Meta function looping and saving everything appropriatly. 
-
-
 #set bootstrap iterations
-boot_n = 10
-
-
-#get train ensemble df
-train_ensemble_df<-f_train_ensemble(GX_DF,Resample_list_results,x)
-
-#Machine learning
-ML_caret_list<-f_caret_list_ML(train_ensemble_df,boot_n)
-
-model_list=ML_caret_list
-###save caret list
-#define test data
-testing<-f_train_test(GX_DF,Resample_list_results$DataPartition,x,F)
-
-# Output data caret list. 
-test<-list()
-test[["gx_testing"]] <- testing[1:2]
-test[["caret_list"]]<- resamples(model_list)
-test[["caret_list_model_preds"]] <- lapply(model_list, predict, newdata=testing)
-test[["splom"]]<-splom(resamples(model_list))
-test[["modelcor"]]<-modelCor(resamples(model_list))
+boot_n = 4
 
 
 
-#save list as resample 1
-
-#caret stack
-greedy_ensemble <- caretEnsemble(
-  model_list, 
-  metric="ROC",
-  trControl=trainControl(
-    number=2,
-    summaryFunction=twoClassSummary,
-    classProbs=TRUE
-  ))
-summary(greedy_ensemble)
-
-model_preds <- lapply(model_list, predict, newdata=testing, type="prob")
-model_preds <- lapply(model_preds, function(x) x[,"Control"])
-model_preds <- data.frame(model_preds)
-ens_preds <- predict(greedy_ensemble, newdata=testing, type="prob")
-model_preds$ensemble <- ens_preds
-caTools::colAUC(model_preds, testing$Phenotype)
+for (i in 1:2){
+  #fold
+  x=i
+  #set top split ID
+  top_split = paste("Split_",x,sep="")
+  #caret list and ensemble
+  f_caret_list_ensemble(GX_DF=GX_DF,Resample_list_results=Resample_list_results,top_split=top_split,boot_n=boot_n,fold=x)
+}
 
 
-#save caret stack
-gbm_ensemble <- caretStack(
-  model_list,
-  method="gbm",
-  verbose=FALSE,
-  tuneLength=15,
-  metric="ROC",
-  trControl=trainControl(
-    method="boot",
-    number=25,
-    savePredictions="final",
-    classProbs=TRUE,
-    summaryFunction=twoClassSummary
-  )
-)
-model_preds3 <- model_preds
-model_preds3$ensemble <- predict(gbm_ensemble, newdata=testing, type="prob")
-caTools::colAUC(model_preds3, testing$Phenotype)
-
-table(testing$Phenotype)
-44+39
-83/100*67
 
 ####dejong
 
@@ -410,6 +441,25 @@ model_list_big <- caretList(
   )
 )
 
+
+
+#caret stack
+greedy_ensemble <- caretEnsemble(
+  model_list, 
+  metric="ROC",
+  trControl=trainControl(
+    number=2,
+    summaryFunction=twoClassSummary,
+    classProbs=TRUE
+  ))
+summary(greedy_ensemble)
+
+model_preds <- lapply(model_list, predict, newdata=testing, type="prob")
+model_preds <- lapply(model_preds, function(x) x[,"Control"])
+model_preds <- data.frame(model_preds)
+ens_preds <- predict(greedy_ensemble, newdata=testing, type="prob")
+model_preds$ensemble <- ens_preds
+caTools::colAUC(model_preds, testing$Phenotype)
 model_list<-model_list_big
 
 #define test data

@@ -1,0 +1,91 @@
+---
+title: "CellMix"
+author: "DJL"
+date: "17/02/2016"
+output:
+  word_document:
+    fig_height: 6
+---
+
+#PCA & CellMix 
+
+#Pseudo Code
+```{r Pseudo Code}
+
+1.) libraries
+2.) functions
+3.) directories
+4.) load data
+5.) Cell Mix
+6.) PCA
+7.) Cut down to relevant probes. 
+8.) Save as new file. 
+
+
+```
+
+
+
+##Install and load Libraries:
+```{r Libraries, message=FALSE,warning=FALSE}
+rm(list = ls())
+dev.off()
+library(lumi)
+library(reshape)
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(tableone)
+library(stargazer)
+
+```
+
+
+#Define Directories
+```{r Define directories}
+top_dir<-getwd()
+data_dir <-"./P0_Characterise/output/"
+data_dir0 <-"./data/"
+data_dejong_dir<-"./P00_Characterise_Dejong/output/"
+P00_output_dir <-"./P00_Characterise_Dejong/output/"
+P00_figs_dir <-"./P00_Characterise_Dejong/figs/"
+```
+
+#Load Data
+```{r Load data}
+#Load
+load(file=paste(data_dejong_dir,"Dejong_reduced_Gx_data_and_pheno.RData",sep=""))
+load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
+
+```
+
+# Cell Mix
+```{r Cell Mix}
+
+
+```
+
+# PCA
+```{r PCA}
+
+
+
+```
+
+# Adjust to relevant probes. overlap with GAP
+```{r overlap with GAP}
+
+
+
+```
+
+
+#Write rdata:
+```{r Clean Dataframes dejong}
+
+
+save(,file=paste(P00_output_dir,"Dejong_.RData",sep=""))
+
+
+```
+

@@ -404,7 +404,7 @@ metric = "ROC"
 boot_n = 25
 
 
-#Load all models
+#Run all models. 
 for (i in 1:Number_of_Splits){
   #fold
   x=i
@@ -417,7 +417,8 @@ for (i in 1:Number_of_Splits){
 
 
 ############################################################################
-full_data<-list()
+#Load all models saved ensemble runs.
+full_data<-list() #empty list wrapper. 
 for (i in 1:Number_of_Splits){
   #fold
   x=i

@@ -404,7 +404,7 @@ metric = "ROC"
 boot_n = 25
 
 
-
+#Load all models
 for (i in 1:Number_of_Splits){
   #fold
   x=i
@@ -418,7 +418,7 @@ for (i in 1:Number_of_Splits){
 
 ############################################################################
 full_data<-list()
-for (i in 1:2){
+for (i in 1:Number_of_Splits){
   #fold
   x=i
   #set top split ID
@@ -427,8 +427,10 @@ for (i in 1:2){
   load(paste(output_dir,project_id,project_name,Sub_prefix,top_split,".rdata",sep=""))
   full_data[[top_split]]<-results_resample
 }
-
-table(full_data$Split_2$gx_testing[,1])
+summary(full_data[[split]]$ensemble_full)
+split = 10
+full_data[[split]]$ensemble_test_performance
+table(full_data$Split_2$gx_testing[,split])
 lapply(full_data$Split_1$ensemble_model_preds_cat,table)
 table(full_data$Split_1$ensemble_model_preds_cat[,8])
 full_data$Split_2$ensemble_model_preds_cat

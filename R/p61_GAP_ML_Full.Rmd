@@ -313,9 +313,10 @@ seed = 7
 ############Step 1 Functions
 ##### Variables
 Number_of_Splits <- 10 #Number of splits
-Split_Percentage <- 0.70 #Split of data
-project_id = "p51_"
-project_name = "GAP_Train_2way"
+#Number_of_Splits <- 2 #Number of splits
+Split_Percentage <- 0.80 #Split of data
+project_id = "p61_"
+project_name = "GAP_2way"
 Sub_prefix = "_Step2_"
 
 
@@ -331,11 +332,13 @@ DataPartition_DF <- createDataPartition(GX_DF$Phenotype,times = Number_of_Splits
 #Variables for Step 2
 #set number of subsets to test
 subsets <- c(1:30)*25
-#subsets <- c(1:3)*25
+subsets <- c(1:3)*25
+boot_n=25
+#boot_n=5
 #set control parameters 
 control <- rfeControl(functions=rfFuncs, #Random Forrest based
                       method="boot", #Repeated CV
-                      number=50, #10 folds
+                      number=boot_n, #10 folds
                       #repeats=40, #10 repeats
                       verbose = FALSE)
 
@@ -346,12 +349,10 @@ Resample_list[["rfelist"]]<-list()
 Resample_list[["plottestlist"]]<-list()
 
 #Run Feature elimination. 
-#Resample_list_results<-f_rfe_tolist(GX_DF, Resample_list, subsets, control, seed)
-#Resample_list_results
+Resample_list_results<-f_rfe_tolist(GX_DF, Resample_list, subsets, control, seed)
 
 #save list
-#save(Resample_list_results, file=paste(output_dir,project_id,project_name,Sub_prefix,"_Resample_List",".rdata",sep=""), compress = T)
-#load
+save(Resample_list_results, file=paste(output_dir,project_id,project_name,Sub_prefix,"_Resample_List",".rdata",sep=""), compress = T)
 
 
 ```
@@ -372,7 +373,7 @@ Linear model to combine maximum 3 models.
 load(file=paste(output_dir,project_id,project_name,Sub_prefix,"_Resample_List",".rdata",sep=""))
 
 #cut down probes to number of samples. 
-Number_of_Splits <- 10 #Number of splits
+#Number_of_Splits <- 10 #Number of splits
 for (Split_n in 1:Number_of_Splits){ 
     split<-Resample_list_results$rfelist[[Split_n]]
     if (length(split) > dim(Resample_list_results[[1]])[1]){
@@ -394,10 +395,10 @@ ML_list2<-list(
     rf=caretModelSpec(method="rf", tuneGrid=expand.grid(.mtry=(1:30)))    
 )
 
-#ML_list2<-list(
-#    glmnet=caretModelSpec(method="glmnet",tuneLength=3),
-#    rf=caretModelSpec(method="rf", tuneGrid=expand.grid(.mtry=(1:3)))    
-#)
+ML_list2<-list(
+    glmnet=caretModelSpec(method="glmnet",tuneLength=3),
+    rf=caretModelSpec(method="rf", tuneGrid=expand.grid(.mtry=(1:3)))    
+)
 
 
 
@@ -406,7 +407,7 @@ metric = "ROC"
 # 4. Meta function looping and saving everything appropriatly. 
 #set bootstrap iterations
 boot_n = 25
-
+#boot_n = 3
 
 #Run all models. 
 for (i in 1:Number_of_Splits){
@@ -433,6 +434,10 @@ for (i in 1:Number_of_Splits){
   load(paste(output_dir,project_id,project_name,Sub_prefix,top_split,".rdata",sep=""))
   full_data[[top_split]]<-results_resample
 }
+
+
+
+
 summary(full_data[[split]]$ensemble_full)
 split = 10
 full_data[[split]]$ensemble_test_performance

@@ -30,13 +30,14 @@ output:
 ```{r Libraries, message=FALSE,warning=FALSE}
 rm(list = ls())
 dev.off()
+library(CellMix)
 library(lumi)
 library(reshape)
 library(plyr)
 library(dplyr)
 library(ggplot2)
-library(tableone)
-library(stargazer)
+library(sva)
+
 
 ```
 
@@ -63,10 +64,79 @@ load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
 ```{r Cell Mix}
 
 
+
+?gedBlood
+
+###GEDBlood Function:
+res_all <- gedBlood(as.matrix(t(Gx_dejong[1:10,2:20])), CLsubset = "WB", verbose = TRUE)
+
+
+#Extract cell proportions from res_all
+wbloodprop<-coef(res_all)
+
+#Remove rows with sum of 0. Rows represent cell types. If a cell type has a sum of 0 across all samples I exclude it. 
+
+reduced_props<-wbloodprop[apply(wbloodprop, 1, function(x) !all(x==0)),]
+
+
+
 ```
+
+
+
+
 
 # PCA
 ```{r PCA}
+
+###################################################
+### code chunk number 1: input
+###################################################
+Gx_dejong[1:10,1:10]
+
+pDataEset_rsn_0<-Gx_dejong[1:2]
+pDataEset_rsn_0[,2]<-"1"
+pDataEset_rsn_0[,3]<- c(1:2)
+names(pDataEset_rsn_0)<-c("Phenotype","fake","fake2")
+###################################################
+### code chunk number 2: input
+###################################################
+exprs_rsn_0<-t(Gx_dejong[,-1])
+str(exprs_rsn_0[1:10,1:10])
+
+#check equal ordering
+all.equal(colnames(exprs_rsn_0),rownames(pDataEset_rsn_0))
+
+###################################################
+### code chunk number 6: input
+###################################################
+mod = model.matrix(~as.factor(Phenotype), data=pDataEset_rsn_0)
+
+
+###################################################
+### code chunk number 7: input
+###################################################
+mod0 = model.matrix(~1,data=pDataEset_rsn_0)
+
+
+###################################################
+### code chunk number 8: input
+###################################################
+n.sv = num.sv(exprs_rsn_0,mod,method="leek")
+n.sv
+
+?num.sv
+
+###################################################
+### code chunk number 9: input
+###################################################
+svobj = sva(exprs_rsn_0,mod,mod0,n.sv=n.sv)
+str(svobj)
+
+tempp2<-as.factor(pDataEset_rsn_0$tech.Conc_Nanodrop)
+tempp<-as.factor(pDataEset_rsn_0$PHENOTYPE)
+boxplot(svobj$sv ~ tempp)
+points(svobj$sv ~ jitter(as.numeric(tempp)),col=as.numeric(tempp2))
 
 
 

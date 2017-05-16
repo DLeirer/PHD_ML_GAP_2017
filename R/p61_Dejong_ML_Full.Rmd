@@ -267,8 +267,8 @@ top_dir<-getwd()
 data_dir <-"./P0_Characterise/output/"
 data_dir0 <-"./data/"
 data_dejong_dir<-"./P00_Characterise_Dejong/output/"
-output_dir <-"./P61_GAP_2way/output/"
-figs_dir <-"./P61_GAP_2way/figs/"
+output_dir <-"./P61_Dejong_2way/output/"
+figs_dir <-"./P61_Dejong_2way/figs/"
 ```
 
 #Load Data
@@ -279,22 +279,34 @@ load(file=paste(data_dejong_dir,"Dejong_reduced_Gx_data_and_pheno.RData",sep="")
 load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
 
 
-#Reduce Gene expression GAP to mirror Dejong. 
-GAP_Fdata<-filter(GAP_Dejong_Full_Fdata,GAP_GAPDJ==TRUE)
+#Reduce Gene expression Dejong to mirror GAP. 
+dejong_Fdata<-filter(GAP_Dejong_Full_Fdata,DeJong_GAPDJ==TRUE)
 
 #Remove all HS and Loc
-GAP_Fdata <- GAP_Fdata %>% 
+dejong_Fdata <- dejong_Fdata %>% 
   mutate(LOC_HS_DROP=ifelse( grepl("^LOC",TargetID),"DROP",
-                       ifelse( grepl("^HS\\.",TargetID), "DROP","KEEP"))) 
-GAP_Fdata<-filter(GAP_Fdata,LOC_HS_DROP == "KEEP")
+                             ifelse( grepl("^HS\\.",TargetID), "DROP","KEEP"))) 
+dejong_Fdata<-filter(dejong_Fdata,LOC_HS_DROP == "KEEP")
+
+
+#clean Dejong
+GX_DF<-Gx_dejong %>% mutate(Phenotype=ifelse(Diagnosis == "control","Control","FEP"))
+features<-dim(GX_DF)[2]
+GX_DF<-GX_DF[,c(features,1:(features-1))]
+GX_DF<-GX_DF[,-c(2)]
+
 
 #Create Dataframe
-GX_DF<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)] #Expression data with Phenotype as first column
+GX_DF<-GX_DF[,c("Phenotype",dejong_Fdata$TargetID)] #Expression data with Phenotype as first column
+
+
 
 #Centre and Scale. 
 preProcValues <- preProcess(GX_DF, method = c("center", "scale"))
 GX_DF <- predict(preProcValues, GX_DF)
 
+dim(GX_DF) #3919 features
+GX_DF[,1]
 
 ```
 
@@ -312,9 +324,10 @@ seed = 7
 ############Step 1 Functions
 ##### Variables
 Number_of_Splits <- 10 #Number of splits
-Split_Percentage <- 0.70 #Split of data
-project_id = "p51_"
-project_name = "GAP_Train_2way"
+#Number_of_Splits <- 2 #Number of splits
+Split_Percentage <- 0.8 #Split of data
+project_id = "p61_"
+project_name = "dejong_data_"
 Sub_prefix = "_Step2_"
 
 
@@ -331,10 +344,12 @@ DataPartition_DF <- createDataPartition(GX_DF$Phenotype,times = Number_of_Splits
 #set number of subsets to test
 subsets <- c(1:30)*25
 #subsets <- c(1:3)*25
+boot_n = 30
+#boot_n = 5
 #set control parameters 
 control <- rfeControl(functions=rfFuncs, #Random Forrest based
                       method="boot", #Repeated CV
-                      number=50, #10 folds
+                      number=boot_n, #10 folds
                       #repeats=40, #10 repeats
                       verbose = FALSE)
 
@@ -345,12 +360,11 @@ Resample_list[["rfelist"]]<-list()
 Resample_list[["plottestlist"]]<-list()
 
 #Run Feature elimination. 
-#Resample_list_results<-f_rfe_tolist(GX_DF, Resample_list, subsets, control, seed)
+Resample_list_results<-f_rfe_tolist(GX_DF, Resample_list, subsets, control, seed)
 #Resample_list_results
 
 #save list
-#save(Resample_list_results, file=paste(output_dir,project_id,project_name,Sub_prefix,"_Resample_List",".rdata",sep=""), compress = T)
-#load
+save(Resample_list_results, file=paste(output_dir,project_id,project_name,Sub_prefix,"_Resample_List",".rdata",sep=""), compress = T)
 
 
 ```
@@ -358,20 +372,11 @@ Resample_list[["plottestlist"]]<-list()
 # Step 3: Build Models 
 ```{r Build Models}
 
-Algorithms. 
-I have a decent list of algorithms that I am using. This is useful for ensemble aswell. Not changing anything here.5x3 - 10x10 fold cross validation. 
-Tuning.
-I have the scripts for this, and am basically just expanding parameter search. 
-Massivivly increasing grid search. 3-20 per parameter?
-Ensembles.
-Find models that are uncorrelated in predictions but accurate.
-Linear model to combine maximum 3 models. 
-
 #load resamples
 load(file=paste(output_dir,project_id,project_name,Sub_prefix,"_Resample_List",".rdata",sep=""))
 
 #cut down probes to number of samples. 
-Number_of_Splits <- 10 #Number of splits
+#Number_of_Splits <- 10 #Number of splits
 for (Split_n in 1:Number_of_Splits){ 
     split<-Resample_list_results$rfelist[[Split_n]]
     if (length(split) > dim(Resample_list_results[[1]])[1]){
@@ -400,12 +405,14 @@ ML_list2<-list(
 
 
 
+
+# 4. Meta function looping and saving everything appropriatly. 
 #Define Metric to choose best model
 metric = "ROC"
-# 4. Meta function looping and saving everything appropriatly. 
+
 #set bootstrap iterations
 boot_n = 25
-
+#boot_n = 5
 
 #Run all models. 
 for (i in 1:Number_of_Splits){
@@ -432,6 +439,9 @@ for (i in 1:Number_of_Splits){
   load(paste(output_dir,project_id,project_name,Sub_prefix,top_split,".rdata",sep=""))
   full_data[[top_split]]<-results_resample
 }
+full_data
+
+
 summary(full_data[[split]]$ensemble_full)
 split = 10
 full_data[[split]]$ensemble_test_performance
@@ -442,18 +452,26 @@ full_data$Split_2$ensemble_model_preds_cat
 
 full_data[[split]]$ensemble_full
 
+full_data$Split_1$caret_list
+
+full_data
+
+#test caret stack in dejong
+results_dejong<-data.frame() #empty list wrapper. 
+for (i in 1:Number_of_Splits){
+  #fold
+  x=i
+  #set top split ID
+  top_split = paste("Split_",x,sep="")
+  print(top_split)
+  results_dejong<-rbind(results_dejong,full_data[[top_split]]$ensemble_test_performance)
+}
 
 
-
-
-#### dejong
-#clean Dejong
-GX_dejong_final<-Gx_dejong %>% mutate(Phenotype=ifelse(Diagnosis == "control","Control","FEP"))
-features<-dim(GX_dejong_final)[2]
-GX_dejong_final<-GX_dejong_final[,c(features,1:(features-1))]
-GX_dejong_final<-GX_dejong_final[,-c(2)]
 
 #test caret list in dejong
+
+
 
 summary(full_data[[split]]$ensemble_full)
 #test caret stack in dejong
@@ -465,7 +483,7 @@ for (i in 1:Number_of_Splits){
   top_split = paste("Split_",x,sep="")
   print(top_split)
   gbm_ensemble<-full_data[[top_split]]$ensemble_full
-  Dejong_results_ensemble[[top_split]]<-predict(gbm_ensemble, newdata=GX_dejong_final)
+  Dejong_results_ensemble[[top_split]]<-predict(gbm_ensemble, newdata=GX_DF)
 }
 
 for (i in 1:Number_of_Splits){
@@ -474,9 +492,11 @@ for (i in 1:Number_of_Splits){
   #set top split ID
   top_split = paste("Split_",x,sep="")
   print(top_split)
-  print(confusionMatrix(Dejong_results_ensemble[[top_split]], GX_dejong_final$Phenotype))
+  print(confusionMatrix(Dejong_results_ensemble[[top_split]], GX_DF$Phenotype))
 
 }
+
+
 
 
 Test_data_1 <- Dejong_cont_pre

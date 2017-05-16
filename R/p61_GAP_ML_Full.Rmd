@@ -295,6 +295,7 @@ GX_DF<-GX_DF_adj[,c("Phenotype",GAP_Fdata$TargetID)] #Expression data with Pheno
 preProcValues <- preProcess(GX_DF, method = c("center", "scale"))
 GX_DF <- predict(preProcValues, GX_DF)
 
+dim(GX_DF) #3919 features
 
 ```
 

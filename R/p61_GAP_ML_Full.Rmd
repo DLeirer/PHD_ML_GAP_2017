@@ -439,8 +439,10 @@ for (i in 1:Number_of_Splits){
 
 
 summary(full_data[[split]]$ensemble_full)
-split = 10
+split = 1
 full_data[[split]]$ensemble_test_performance
+full_data[[split]]$ensemble_model_preds_cat
+full_data[[split]]$ensemble_model_preds_probability
 table(full_data$Split_2$gx_testing[,split])
 lapply(full_data$Split_1$ensemble_model_preds_cat,table)
 table(full_data$Split_1$ensemble_model_preds_cat[,8])

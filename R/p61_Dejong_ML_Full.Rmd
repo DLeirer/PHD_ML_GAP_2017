@@ -393,7 +393,8 @@ ML_list2<-list(
     svmLinear2=caretModelSpec(method="svmLinear2", tuneLength=10),
     svmPoly=caretModelSpec(method="svmPoly", tuneLength=10),
     glmnet=caretModelSpec(method="glmnet",tuneLength=10),
-    nb=caretModelSpec(method="nb",tuneLength=5),
+    #nb=caretModelSpec(method="nb",tuneLength=5),
+    #knn
     pcaNNet=caretModelSpec(method="pcaNNet",tuneLength=10),
     rf=caretModelSpec(method="rf", tuneGrid=expand.grid(.mtry=(1:30)))    
 )

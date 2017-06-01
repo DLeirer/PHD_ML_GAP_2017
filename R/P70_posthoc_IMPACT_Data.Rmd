@@ -1,0 +1,229 @@
+##Subset to good probes:
+```{r}
+
+
+table(GX_DF$Phenotype)
+table(GX_DF2$Phenotype)
+dim(GX_DF2)
+full_data$Split_1
+
+full_data$Split_2$modelcor
+25*(30^1)
+25*(10^2)
+
+
+load("IMPACTexp.eset_bg_log2_rsn_rgf_baseline.RData")
+
+
+str(eset_bg_log2_rsn_rgf_baseline)
+
+
+IMPACT_Pheno<-eset_bg_log2_rsn_rgf_baseline@phenoData@data
+IMPACT_fdata<-eset_bg_log2_rsn_rgf_baseline@featureData@data
+IMPACT_GX<-exprs(eset_bg_log2_rsn_rgf_baseline)
+
+IMPACT_GX[1:10,1:10]
+
+#Get Impact good
+IMPACT_fdata_GP<-filter(IMPACT_fdata,good_probe=="TRUE")
+
+#get IMPACT missing.
+table(colnames(GX_DF2)%in%IMPACT_fdata_GP$TargetID)
+mising_probes<-colnames(GX_DF2)[!colnames(GX_DF2)%in%IMPACT_fdata_GP$TargetID]
+IMPACT_fdata_missing<-IMPACT_fdata[IMPACT_fdata$TargetID%in%mising_probes,]
+IMPACT_fdata_missing<-IMPACT_fdata_missing[!duplicated(IMPACT_fdata_missing$TargetID),]
+dim(IMPACT_fdata_missing)
+mising_probes%in%IMPACT_fdata_missing$TargetID 
+
+#Add Missing Impact to good
+IMPACT_fdata_fp<-rbind(IMPACT_fdata_GP,IMPACT_fdata_missing)
+dim(IMPACT_fdata_fp)
+dim(IMPACT_fdata_GP)
+
+
+
+table(colnames(GX_DF2)%in%IMPACT_fdata_fp$TargetID) #2 missing is fine. 
+
+
+
+#Subset IMPACT GX to Nuids
+
+IMPACT_fdata_fp<-IMPACT_fdata_fp[!duplicated(IMPACT_fdata_fp$TargetID),]
+table(colnames(GX_DF2)%in%IMPACT_fdata_fp$TargetID) #2 missing is fine. 
+
+
+
+
+IMPACT_GX_fin<-IMPACT_GX[IMPACT_fdata_fp$nuID,]
+table(rownames(IMPACT_GX_fin)%in%IMPACT_fdata_fp$nuID)
+IMPACT_GX_fin<-t(IMPACT_GX_fin)
+IMPACT_fdata_fp$nuID[1:10]
+IMPACT_fdata_fp$nuID[1:10]
+all.equal(colnames(IMPACT_GX_fin),IMPACT_fdata_fp$nuID) #True
+
+
+#Change feature names to symbol
+colnames(IMPACT_GX_fin)<-IMPACT_fdata_fp$TargetID
+all.equal(colnames(IMPACT_GX_fin),IMPACT_fdata_fp$TargetID) #True
+
+
+
+#Predict data
+
+
+Test_data_1 <- IMPACT_GX_fin
+#make into dataframe
+Test_data_1<-as.data.frame(Test_data_1)
+#add phenotype col
+Test_data_1$Phenotype <- "FEP" 
+#Test_data_1$Phenotype[10] <- "Control" 
+#Preprocess
+preProcValues <- preProcess(Test_data_1, method = c("center", "scale"))
+Test_data_1 <- predict(preProcValues, Test_data_1)
+rownames(Test_data_1)
+
+#Add PANNS
+IMPACT_PANNS<-read.csv("IMPACT_PANNS_scores.csv")
+str(IMPACT_PANNS)
+#Add ICD_10
+ICD_10_data<-read.csv("IMPACTExpressionDiagnosesDL.csv")
+str(ICD_10_data)
+
+IMPACT_PANNS_ICD[1,]
+#combine Panns and ICD_10
+IMPACT_PANNS_ICD<-full_join(ICD_10_data, IMPACT_PANNS, by = "sampleID")
+str(IMPACT_PANNS_ICD)
+
+#Add to GX data
+Test_data_1$sampleID<-rownames(Test_data_1)
+
+Test_data_2<-left_join(Test_data_1, IMPACT_PANNS_ICD, by = "sampleID")
+all.equal(Test_data_2$sampleID,Test_data_1$sampleID) # True
+
+
+
+rownames(Test_data_2)
+IMPACT_PANNS$sampleID
+
+Test_data_1[1:10,1:10]
+
+
+
+#Predict data
+model_list<-full_data$Split_1$caret_list
+model_preds <- lapply(model_list, predict, newdata=Test_data_2, type="prob")
+model_preds <- lapply(model_preds, function(x) x[,"FEP"])
+model_preds <- data.frame(model_preds)
+model_preds3 <- model_preds
+model_preds3$ensemble <- predict(gbm_ensemble, newdata=Test_data_2, type="prob")
+caTools::colAUC(model_preds3, Test_data_2$Phenotype)
+
+
+model_preds2 <- lapply(model_list, predict, newdata=Test_data_2)
+model_preds2 <- data.frame(model_preds2)
+
+lapply(model_preds2,table)
+table(model_preds2$nb)
+102+69
+102/171*100
+
+lapply(model_preds3,sum)
+sum(model_preds3$nb)/171
+
+colnames(model_preds2)<-paste(colnames(model_preds2),"_Cat",sep="")
+
+model_preds3
+
+
+model_preds_ALL<-cbind(model_preds3,Test_data_2)
+model_preds_ALL<-cbind(model_preds2,model_preds_ALL)
+model_preds_ALL$panss_negative_base
+model_preds_ALL$ICD10.diagnosis
+
+#Plot
+ggplot(data = model_preds_ALL, aes(x = panss1_total_base, y= glmnet)) +
+  geom_point()+
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+ggplot(data = model_preds_ALL, aes(x = panss_negative_base, y= glmnet)) +
+  geom_point()+
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+ggplot(data = model_preds_ALL, aes(x = panss_negative_T1, y= glmnet)) +
+  geom_point()+
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+
+table(model_preds_ALL$ICD10.diagnosis)
+#mutate ICD_10 diagnosis
+model_preds_ALL <- model_preds_ALL %>% 
+  mutate(ICD_10_cat=ifelse(ICD10.diagnosis < 30,"Schizophrenia","Other"))
+model_preds_ALL$ICD_all_char<-as.character(model_preds_ALL$ICD10.diagnosis)
+
+only_schizo<-filter(model_preds_ALL,ICD_10_cat=="Schizophrenia")
+lapply(only_schizo[,1:6],table)
+35+
+69/104*100
+
+#Diagnosis 
+ggplot(data = model_preds_ALL, aes(x=ICD_10_cat, y=glmnet, colour=ICD_all_char,fill = ICD_10_cat)) +
+  geom_boxplot(alpha = 0)+
+  geom_jitter(alpha = 0.3)+
+  coord_flip()+
+  ggtitle("Glmnet Model Trained on Dejong Predictions in IMPACT data")
+
+ggplot(data = model_preds3, aes(x = ICD_DSM, y=glmnet, colour = ICD_DSM, fill = ICD_DSM)) +
+  geom_boxplot(alpha = 0)+
+  geom_jitter(alpha = 0.3)+
+  coord_flip()+
+  ggtitle("Glmnet Model Trained on Dejong Predictions in GAP data")
+
+
+
+#Select model data
+pmodel<-"glmnet"
+
+#get quantiles for cutting into equal groups
+Pquantiles<-quantile(model_preds_ALL[,pmodel], probs = c(0,0.25,0.5,0.75,1))
+#round and 
+quantCuts<-as.vector(round(Pquantiles, 2)*100)[-1]
+#create cuts and add to DF
+model_preds_ALL$glmnet_quants<-cut(model_preds_ALL[,pmodel],Pquantiles,labels=quantCuts,include.lowest = T)
+
+model_preds_ALL$panss_negative_T1
+model_preds_ALL$panss3_total_T3
+
+
+
+ggplot(data = model_preds_ALL, aes(x=glmnet_quants, y=panss_negative_T2, colour=glmnet_quants)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+ggplot(data = model_preds_ALL, aes(x=glmnet, y=panss_negative_T2)) +
+  geom_point()+ 
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+ggplot(data = model_preds_ALL, aes(x=glmnet_quants, y=panss3_total_T3, colour=glmnet_quants)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+ggplot(data = model_preds_ALL, aes(x=glmnet, y=panss3_total_T3)) +
+  geom_point()+ 
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+
+ggplot(data = model_preds_ALL, aes(x=glmnet_quants, y=panss_positive_T3, colour=glmnet_quants)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+ggplot(data = model_preds_ALL, aes(x=glmnet, y=panss_positive_T3)) +
+  geom_point()+ 
+  ggtitle("Ensemble Model Trained on Dejong Predictions in IMPACT data vs PANSS")
+
+```
+
+
+

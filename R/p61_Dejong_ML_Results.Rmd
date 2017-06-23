@@ -13,27 +13,8 @@ output:
 **Aim**  
 Create Machine learning models using GAP data. 
 
-
-#Load Libraries
-```{r load_libs, tidy=TRUE}
-rm(list = ls())
-dev.off()
-library(plyr)
-library(dplyr)
-library(lubridate)
-library(doMC)
-library(caret)
-library(reshape)
-library(tableone)
-library(stargazer)
-library(mice)
-library(caretEnsemble)
-library(ggplot2)
-
-```
-
-#Functions
-```{r define functions, tidy=TRUE}
+#Old Functions
+```{r old functions, tidy=TRUE}
 #function for Recursive feature elimination. Requires helper functions below. 
 f_rfe_tolist <- function (GX_DF, Resample_list, subsets, control, seed){
   Resample_df<-Resample_list[["DataPartition"]]
@@ -183,23 +164,6 @@ f_run_caret_stack <- function (model_list,ensemble_method="gbm",ensemble_tune=10
 }
 
 # 4. get caret list and stack results
-f_get_caret_stack_results <- function (caret_list_data,ensemble_data,test_df,probability=TRUE,Pheno="Control"){
-  if (probability == TRUE){
-    print("creating probability df")
-    model_predi <- lapply(caret_list_data, predict, newdata=test_df, type="prob")
-    model_predi <- lapply(model_predi, function(x) x[,Pheno])
-    model_predi <- data.frame(model_predi)
-    model_predi$ensemble <- predict(ensemble_data, newdata=test_df, type="prob")
-    return(model_predi)
-  }else{
-    print("creating categorical df")
-    model_predi <- lapply(caret_list_data, predict, newdata=test_df)
-    model_predi <- data.frame(model_predi)
-    model_predi$ensemble <- predict(ensemble_data, newdata=test_df)
-    model_predi$Phenotype<-test_df[,1]
-    return (model_predi)
-  }
-}
 
 f_save_results_1 <- function (results_resample,model_list=model_list,test_df,Sub_prefix=Sub_prefix){
   results_resample[["gx_testing"]] <- test_df
@@ -260,6 +224,7 @@ f_caret_list_ensemble <- function (GX_DF=GX_DF,Resample_list_results=Resample_li
 
 
 ```
+
 #Load Data
 ```{r Load data}
 
@@ -298,6 +263,62 @@ dim(GX_DF) #3919 features
 GX_DF[,1]
 
 ```
+
+#Load Libraries
+```{r load_libs, tidy=TRUE}
+rm(list = ls())
+dev.off()
+library(plyr)
+library(dplyr)
+library(lubridate)
+library(doMC)
+library(caret)
+library(reshape)
+library(tableone)
+library(stargazer)
+library(mice)
+library(caretEnsemble)
+library(ggplot2)
+
+```
+
+
+
+#Functions
+```{r define functions, tidy=TRUE}
+
+
+# 6 Functions For reporting results: 
+f_get_caret_stack_results <- function (caret_list_data,ensemble_data,test_df,probability=TRUE,Pheno="Control"){
+  if (probability == TRUE){
+    print("creating probability df")
+    model_predi <- lapply(caret_list_data, predict, newdata=test_df, type="prob")
+    model_predi <- lapply(model_predi, function(x) x[,Pheno])
+    model_predi <- data.frame(model_predi)
+    model_predi$ensemble <- predict(ensemble_data, newdata=test_df, type="prob")
+    return(model_predi)
+  }else{
+    print("creating categorical df")
+    model_predi <- lapply(caret_list_data, predict, newdata=test_df)
+    model_predi <- data.frame(model_predi)
+    model_predi$ensemble <- predict(ensemble_data, newdata=test_df)
+    model_predi$Phenotype<-test_df[,"Phenotype"]
+    return (model_predi)
+  }
+}
+
+#Function for ConfusionMatrix
+f_Confusion_matrix <- function (input_data,Prediction_cols,Pheno_col="Phenotype"){
+  Confusiondata<-list()
+  for (i in Prediction_cols){
+    Confusiondata[[i]]<-confusionMatrix(input_data[,i], input_data[,Pheno_col])
+  }
+  return(Confusiondata)
+}
+
+```
+
+
 
 
 #Define Directories
@@ -441,11 +462,10 @@ for (i in 1:Number_of_Splits){
   load(paste(output_dir,project_id,project_name,Sub_prefix,top_split,".rdata",sep=""))
   full_data[[top_split]]<-results_resample
 }
-full_data
 
 
 
-#Create Table Of performance for all models. 
+#Create Table of performance for all models. 
 ResultsTable = list()
 TableColOrder<-colnames(data.frame(full_data[[1]]$ensemble_test_performance))
 for (i in 1:Number_of_Splits){
@@ -497,7 +517,6 @@ ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_ROC_vs_Dejong_models"
 
 
 
-
 summary(full_data[[split]]$ensemble_full)
 split = 10
 full_data[[split]]$ensemble_test_performance
@@ -541,66 +560,25 @@ for (i in 1:Number_of_Splits){
 
 ####### Load GAP
 load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
+#load(file=paste(data_dir,"GX_DF_full_adj_data.Rdata",sep=""))
 
 
-#Centre and Scale. 
 #Centre and Scale. 
 preProcValues <- preProcess(GX_DF_adj, method = c("center", "scale"))
 GX_DF_GAP <- predict(preProcValues, GX_DF_adj)
+#preProcValues <- preProcess(GX_DF_full_adj, method = c("center", "scale"))
+#GX_DF_GAP2 <- predict(preProcValues, GX_DF_full_adj)
 dim(GX_DF_GAP)
 GX_DF_GAP[1:10,1:10]
 
 ####### Clean GAP data
+Test_data_1 <-  GX_DF_GAP %>%
+      mutate(ICD_DSM = ifelse(is.na(ICD_DSM),"Other_Psychosis",ICD_DSM))
 
 
-
-
-###### Predict GAP using category by class. 
-Test_data_1 <- GX_DF_GAP
-Dejong_results_ensemble2<-list() #empty list wrapper. 
-confuse_ensemble2<-list() #empty list wrapper. 
-for (i in 1:Number_of_Splits){
-  #fold
-  x=i
-  #set top split ID
-  top_split = paste("Split_",x,sep="")
-  print(top_split)
-  gbm_ensemble<-full_data[[top_split]]$ensemble_full
-  Dejong_results_ensemble2[[top_split]]<-predict(gbm_ensemble, newdata=Test_data_1)
-  confuse_ensemble2[[top_split]]<-confusionMatrix(Dejong_results_ensemble2[[top_split]], Test_data_1$Phenotype)
-  print(confuse_ensemble2[[top_split]])
-}
-
-full_data$Split_2$
-#Extract Metrics for table for all splits. 
-confuse_ensemble2[[1]]$overall
-
-
-
-ResultsTable = list()
-TableColOrder<-colnames(data.frame(full_data[[1]]$ensemble_test_performance))
-for (i in 1:Number_of_Splits){
-  #fold
-  x=i
-  #set top split ID
-  top_split = paste("Split_",x,sep="")
-  #get data into df
-  tempdf = data.frame(full_data[[i]]$ensemble_test_performance)
-  if (length(tempdf) != 7){
-    #add to list
-    tempdf$pcaNNet=NA
-  }  
-  rownames(tempdf) = top_split
-  ResultsTable[[top_split]] = t(tempdf[,TableColOrder])  
-
-} 
-
-
-
-
-i = 5
 ###### Generate GAP results
 ResultsTable_GAP = list()
+ResultsList_GAP_allpatients = list()
 TableColOrder<-colnames(data.frame(full_data[[1]]$ensemble_test_performance))
 for (i in 1:Number_of_Splits){
   #set top split ID
@@ -610,7 +588,13 @@ for (i in 1:Number_of_Splits){
   gbm_ensemble<-full_data[[top_split]]$ensemble_full
   #Get predictions for fold
   model_preds<-f_get_caret_stack_results (model_list,gbm_ensemble,Test_data_1,probability=TRUE,Pheno="Control")
+  #Get class predictions
+  model_preds_class<-f_get_caret_stack_results (model_list,gbm_ensemble,Test_data_1,probability=F,Pheno="Control")
+  #Change Colnames
+  model_preds_class$Phenotype=NULL
+  colnames(model_preds_class)=paste(colnames(model_preds_class),"Categorical",sep="_")  
   # Into temp DF
+  ResultsList_GAP_allpatients[[top_split]] = cbind(Test_data_1[,1:27],model_preds,model_preds_class)
   tempdf = data.frame(caTools::colAUC(model_preds, Test_data_1$Phenotype))
   # Add pcaNNet if missing
   if (length(tempdf) != 7){
@@ -628,41 +612,94 @@ rownames(MLresults_table_GAP)=paste("Train_Data_",c(1:10),sep="")
 write.csv(MLresults_table_GAP,paste(output_dir,project_id,project_name,Sub_prefix,"MLresults_GAP.csv",sep=""))
 
 
-
-dim(model_preds)
-
-full_data$Split_1$ensemble_test_performance
-
-
-#predict(model_list[[1]],Test_data_1)
+#Results for all Patients GAP. In list. Save!
+save(ResultsList_GAP_allpatients, file=paste(output_dir,project_id,project_name,Sub_prefix,"GAP_Patient_predictions_Saved.rdata",sep=""), compress = T)
 
 
 
-model_preds <- lapply(model_list, predict, newdata=Test_data_1, type="prob")
-model_preds <- lapply(model_preds, function(x) x[,"Control"])
-model_preds <- data.frame(model_preds)
-model_preds3 <- model_preds
-model_preds3$ensemble <- predict(gbm_ensemble, newdata=Test_data_1, type="prob")
-caTools::colAUC(model_preds3, Test_data_1$Phenotype)
+###### Make Split 1 
+#Function
+#Function for Getting Accuracy Table
+f_meta_confuse<-function(Input_Data,GAP_Data_subset,Dejong_split = "Split_1"){
+  confuse_out<-f_Confusion_matrix(Input_Data,colnames(Input_Data)[35:41])
+  #Make lists for main metrics
+  temp_dfrows<-names(confuse_out)
+  overall_list=list()
+  for (i in 1:7){  
+    overall_list[["overall"]][[temp_dfrows[i]]]=confuse_out[[temp_dfrows[i]]]$overall
+    overall_list[["byClass"]][[temp_dfrows[i]]]=confuse_out[[temp_dfrows[i]]]$byClass
+  }
 
-model_preds <- lapply(model_list, predict, newdata=Test_data_1)
-model_preds <- data.frame(model_preds)
-model_preds$ensemble <- predict(gbm_ensemble, newdata=Test_data_1)
-model_preds$Phenotype<-GX_DF2$Phenotype
-model_preds[1:10,]
-model_preds3[1:10,]
+  #Create final DF
+  Split_temp_df<-rbind(data.frame(overall_list[["overall"]]),data.frame(overall_list[["byClass"]]))
+  Split_temp_df<-data.frame(t(round(Split_temp_df, digits = 3)))
+  Split_temp_df$GAP_Data<-GAP_Data_subset
+  Split_temp_df$Dejong_data<-Dejong_split
+  Split_temp_df$Method<-colnames(Input_Data)[28:34]
+  return(Split_temp_df)
+}
+
+#Make Data frame for split 1
+Split_1_Data<-ResultsList_GAP_allpatients$Split_1
+
+## Full GAP Data
+Full_GAP_Metrics_split_1<-f_meta_confuse(Split_1_Data,"Full")
+
+## Remove other psychosis
+Split_1_Data_NOP<-filter(Split_1_Data,ICD_DSM !="Other_Psychosis")
+GAP_NOP_Metrics_split_1<-f_meta_confuse(Split_1_Data_NOP,"Control_Schizophrenia")
+
+## Remove Schizophrenia
+Split_1_Data_OP<-filter(Split_1_Data,ICD_DSM !="Schizophrenia")
+GAP_OP_Metrics_split_1<-f_meta_confuse(Split_1_Data_OP,"Control_Other_Psychosis")
+
+#Combine
+full_Accuracy_Table<-rbind(Full_GAP_Metrics_split_1,GAP_NOP_Metrics_split_1,GAP_OP_Metrics_split_1)
+#Sort
+full_Accuracy_Table<-full_Accuracy_Table[,c(19:21,1:18)]
+#Save
+write.csv(full_Accuracy_Table,paste(output_dir,project_id,project_name,Sub_prefix,"Split_1_Confusion_Matrix_metrics.csv",sep=""))
+#Small Table
+full_Accuracy_Table
 
 
-model_preds3$Phenotype<-GX_DF2[,1]
-model_preds3$ICD_DSM<-GX_DF2[,2]
-model_preds3$ICD_DSM<-GX_DF2[,2]
-model_preds3$ICD10_GAP<-GX_DF_adj$icd10
-model_preds3$Ethnicity<-GX_DF_adj$Ethnicity
+#Save to file
+write.csv(Split_1_metrics_full,paste(output_dir,project_id,project_name,Sub_prefix,"Split_1_Confusion_Matrix_metrics.csv",sep=""))
 
 
-write.table(model_preds[1:10,],file = "Cat.csv")
-write.table(round(model_preds3[1:10,],2),file = "percentage.csv")
-model_preds[1:10,]
+
+Dejong_results_ensemble2<-list() #empty list wrapper. 
+confuse_split_1<-list() #empty list wrapper. 
+for (i in 1:Number_of_Splits){
+  #fold
+  x=i
+  #set top split ID
+  top_split = paste("Split_",x,sep="")
+  print(top_split)
+  
+  print(confuse_ensemble2[[top_split]])
+}
+
+
+
+
+
+#Make Plots
+gglist<-list()
+for (i in 1:Number_of_Splits){
+  #set top split ID
+  top_split = paste("Split_",i,sep="")
+  gglist[[top_split]]=ggplot(data = ResultsList_GAP_allpatients[[top_split]], aes(x = ICD_DSM, y=ensemble, colour = ICD_DSM, fill = ICD_DSM)) +
+    geom_boxplot(alpha = 0)+
+    geom_jitter(alpha = 0.3)+
+    coord_flip()+
+    facet_wrap(~Ethnicity)+
+    ggtitle(paste(top_split,"GAP data Predictions","Glmnet","Model",sep=" "))
+}
+gglist
+
+
+
 
 #combined predictions and real values
 ggplot(data = model_preds3, aes(x = ICD_DSM, y=glmnet, colour = ICD_DSM, fill = ICD_DSM)) +

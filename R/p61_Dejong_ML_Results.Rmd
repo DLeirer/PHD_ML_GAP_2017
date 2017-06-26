@@ -663,28 +663,35 @@ write.csv(full_Accuracy_Table,paste(output_dir,project_id,project_name,Sub_prefi
 full_Accuracy_Table
 
 
-#Save to file
-write.csv(Split_1_metrics_full,paste(output_dir,project_id,project_name,Sub_prefix,"Split_1_Confusion_Matrix_metrics.csv",sep=""))
 
 
-
-Dejong_results_ensemble2<-list() #empty list wrapper. 
-confuse_split_1<-list() #empty list wrapper. 
-for (i in 1:Number_of_Splits){
-  #fold
-  x=i
-  #set top split ID
-  top_split = paste("Split_",x,sep="")
-  print(top_split)
-  
-  print(confuse_ensemble2[[top_split]])
+##### Make Bar Plots of data
+#Make Plots function
+f_boxplot_ML_gx <-function(inputd,xax,yax,col,plot_ylabel,pfacets,ptitle) {
+  ggplot(inputd, aes_string(x=xax,y=yax, colour = col)) +
+    #geom_point() +  
+    geom_boxplot(notch=F)+
+    geom_jitter() + 
+    coord_flip()+
+    labs(x = xax) +  labs(y = plot_ylabel)+
+    #facet_wrap(as.formula(paste("~", pfacets)))+
+    ggtitle(ptitle)  
 }
 
+plot_ylabel = "Ensemble predicted probability of being Control"
+
+#2 Way Boxplot
+f_boxplot_ML_gx(Split_1_Data,"Phenotype","ensemble","Phenotype",plot_ylabel,"","")
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_Split_1_Ensemble_Case_Control",".png",sep=""))
+#3 Way Boxplot
+f_boxplot_ML_gx(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM",plot_ylabel,"","")
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_Split_1_Ensemble_3_Scz_Other_Control",".png",sep=""))
+
+#Boxplots for Ensemble. 4 things to look at. 1: Case vs Control. 2: 3-Way.  
+Split_1_Data
 
 
-
-
-#Make Plots
+#Plots of Algorithm for all splits
 gglist<-list()
 for (i in 1:Number_of_Splits){
   #set top split ID

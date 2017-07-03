@@ -279,7 +279,10 @@ library(stargazer)
 library(mice)
 library(caretEnsemble)
 library(ggplot2)
-
+library(VennDiagram)
+library(WGCNA)
+library(flashClust)
+library(data.table)
 ```
 
 
@@ -311,10 +314,48 @@ f_get_caret_stack_results <- function (caret_list_data,ensemble_data,test_df,pro
 f_Confusion_matrix <- function (input_data,Prediction_cols,Pheno_col="Phenotype"){
   Confusiondata<-list()
   for (i in Prediction_cols){
-    Confusiondata[[i]]<-confusionMatrix(input_data[,i], input_data[,Pheno_col])
+    Confusiondata[[i]]<-confusionMatrix(input_data[,i], input_data[,Pheno_col], positive = "FEP")
   }
   return(Confusiondata)
 }
+
+
+
+#venn Diagram function
+plotVennDia <- function(a, ...) {
+    grid.newpage()
+    if (length(a) == 1) {
+        out <- draw.single.venn(likes(a), ...)
+    }
+    if (length(a) == 2) {
+        out <- draw.pairwise.venn(likes(a[1]), likes(a[2]), likes(a[1:2]), ...)
+    }
+    if (length(a) == 3) {
+        out <- draw.triple.venn(likes(a[1]), likes(a[2]), likes(a[3]), likes(a[1:2]), 
+            likes(a[2:3]), likes(a[c(1, 3)]), likes(a), ...)
+    }
+    if (length(a) == 4) {
+        out <- draw.quad.venn(likes(a[1]), likes(a[2]), likes(a[3]), likes(a[4]), 
+            likes(a[1:2]), likes(a[c(1, 3)]), likes(a[c(1, 4)]), likes(a[2:3]), 
+            likes(a[c(2, 4)]), likes(a[3:4]), likes(a[1:3]), likes(a[c(1, 2, 
+                4)]), likes(a[c(1, 3, 4)]), likes(a[2:4]), likes(a), ...)
+    }
+    if (!exists("out")) 
+        out <- "Oops"
+    return(out)
+}
+
+#Venn Diagram helper fun
+likes <- function(animals) {
+    ppl <- allpredictorsUnique
+    for (i in 1:length(animals)) {
+        ppl <- subset(ppl, ppl[animals[i]] == T)
+    }
+    nrow(ppl)
+}
+
+likes(c("Gx","Gx_Scz","Gx_PRS"))
+
 
 ```
 
@@ -434,6 +475,7 @@ for (Split_n in 1:Number_of_Splits){
     split<-Probe_list_res[[Split_n]]
     Probe_list_res[[Split_n]]<-sort(split)
 }
+Probe_list_res
 
 Reduce(intersect, Probe_list_res[c(1,3,10)])
 
@@ -517,31 +559,6 @@ ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_ROC_vs_Dejong_models"
 
 
 
-summary(full_data[[split]]$ensemble_full)
-split = 10
-full_data[[split]]$ensemble_test_performance
-table(full_data$Split_2$gx_testing[,split])
-lapply(full_data$Split_1$ensemble_model_preds_cat,table)
-table(full_data$Split_1$ensemble_model_preds_cat[,8])
-full_data$Split_2$ensemble_model_preds_cat
-
-full_data[[split]]$ensemble_full
-
-full_data$Split_1$caret_list
-
-full_data$Split_2$ensemble_model_preds_cat
-
-#test caret stack in dejong
-results_dejong<-data.frame() #empty list wrapper. 
-for (i in 1:Number_of_Splits){
-  #fold
-  x=i
-  #set top split ID
-  top_split = paste("Split_",x,sep="")
-  print(top_split)
-  results_dejong<-rbind(results_dejong,full_data[[top_split]]$ensemble_test_performance)
-}
-
 
 ####### Predict Dejong Test
 
@@ -550,6 +567,33 @@ for (i in 1:Number_of_Splits){
 
 
 ####### Statistical Tests
+
+
+
+####### Get weights for model building ensemble. 
+full_data$Split_1$modelcor
+summary(full_data$Split_1$ensemble_full)
+full_data$Split_1$ensemble_full
+
+####### Get Probes for models
+#Make lists of predictors
+varImp(full_data$Split_1$caret_list$glmnet, scale = FALSE)
+varImp(full_data$Split_1$caret_list$rf, scale = FALSE)
+
+varImp(full_data$Split_1$ensemble_full$ens_model, scale = FALSE)
+
+
+
+# Get Probes and feature importance
+
+# make list of overlap
+
+# make venn diagram 
+
+# make 
+
+
+
 
 
 ```
@@ -562,18 +606,37 @@ for (i in 1:Number_of_Splits){
 load(file=paste(data_dir,"GX_DF_adj_data.Rdata",sep=""))
 #load(file=paste(data_dir,"GX_DF_full_adj_data.Rdata",sep=""))
 
-
+GX_DF_not_scaled<-GX_DF_adj[,1:27]
 #Centre and Scale. 
 preProcValues <- preProcess(GX_DF_adj, method = c("center", "scale"))
 GX_DF_GAP <- predict(preProcValues, GX_DF_adj)
-#preProcValues <- preProcess(GX_DF_full_adj, method = c("center", "scale"))
-#GX_DF_GAP2 <- predict(preProcValues, GX_DF_full_adj)
 dim(GX_DF_GAP)
-GX_DF_GAP[1:10,1:10]
+GX_DF_GAP[,1:27]<-GX_DF_not_scaled
+
 
 ####### Clean GAP data
 Test_data_1 <-  GX_DF_GAP %>%
       mutate(ICD_DSM = ifelse(is.na(ICD_DSM),"Other_Psychosis",ICD_DSM))
+
+
+f_get_caret_stack_results <- function (caret_list_data,ensemble_data,test_df,probability=TRUE,Pheno){
+  if (probability == TRUE){
+    print("creating probability df")
+    model_predi <- lapply(caret_list_data, predict, newdata=test_df, type="prob")
+    model_predi <- lapply(model_predi, function(x) x[,Pheno])
+    model_predi <- data.frame(model_predi)
+    model_predi$ensemble <- predict(ensemble_data, newdata=test_df, type="prob")
+    return(model_predi)
+  }else{
+    print("creating categorical df")
+    model_predi <- lapply(caret_list_data, predict, newdata=test_df)
+    model_predi <- data.frame(model_predi)
+    model_predi$ensemble <- predict(ensemble_data, newdata=test_df)
+    model_predi$Phenotype<-test_df[,"Phenotype"]
+    return (model_predi)
+  }
+}
+
 
 
 ###### Generate GAP results
@@ -587,7 +650,7 @@ for (i in 1:Number_of_Splits){
   model_list<-full_data[[top_split]]$caret_list
   gbm_ensemble<-full_data[[top_split]]$ensemble_full
   #Get predictions for fold
-  model_preds<-f_get_caret_stack_results (model_list,gbm_ensemble,Test_data_1,probability=TRUE,Pheno="Control")
+  model_preds<-1-f_get_caret_stack_results (model_list,gbm_ensemble,Test_data_1,probability=TRUE,Pheno="Control")
   #Get class predictions
   model_preds_class<-f_get_caret_stack_results (model_list,gbm_ensemble,Test_data_1,probability=F,Pheno="Control")
   #Change Colnames
@@ -656,11 +719,14 @@ GAP_OP_Metrics_split_1<-f_meta_confuse(Split_1_Data_OP,"Control_Other_Psychosis"
 #Combine
 full_Accuracy_Table<-rbind(Full_GAP_Metrics_split_1,GAP_NOP_Metrics_split_1,GAP_OP_Metrics_split_1)
 #Sort
-full_Accuracy_Table<-full_Accuracy_Table[,c(19:21,1:18)]
+full_Accuracy_Table<-full_Accuracy_Table[,c(19:21,1,18,2:17)]
 #Save
 write.csv(full_Accuracy_Table,paste(output_dir,project_id,project_name,Sub_prefix,"Split_1_Confusion_Matrix_metrics.csv",sep=""))
 #Small Table
 full_Accuracy_Table
+
+
+
 
 
 
@@ -678,7 +744,7 @@ f_boxplot_ML_gx <-function(inputd,xax,yax,col,plot_ylabel,pfacets,ptitle) {
     ggtitle(ptitle)  
 }
 
-plot_ylabel = "Ensemble predicted probability of being Control"
+plot_ylabel = "Ensemble predicted schizophrenia probability"
 
 #2 Way Boxplot
 f_boxplot_ML_gx(Split_1_Data,"Phenotype","ensemble","Phenotype",plot_ylabel,"","")
@@ -687,8 +753,49 @@ ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_Split_1_Ensemble_Case
 f_boxplot_ML_gx(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM",plot_ylabel,"","")
 ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_Split_1_Ensemble_3_Scz_Other_Control",".png",sep=""))
 
-#Boxplots for Ensemble. 4 things to look at. 1: Case vs Control. 2: 3-Way.  
-Split_1_Data
+#Density plots for all models
+title = "Density Plots Stratified by Control and Psychosis type"
+ggplot(Split_1_Data, aes(ensemble, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  ggtitle(title)
+
+######################Density plots
+#######All models
+density_plots1=Split_1_Data[,c(1:34)]
+density_plots2<-melt(density_plots1, id=c(names(density_plots1[,-c(28:34)])))
+#Change colnames
+colnames(density_plots2)<-c(names(density_plots1[,-c(28:34)]),"Model","Percentage")
+#define X axis Label
+plot_xlabel_density = "Predicted Schizophrenia probability from Dejong Models"
+#Control vs FEP
+#title = "Density Plots Stratified by Control and FEP"
+ggplot(density_plots2, aes(Percentage, colour = Phenotype)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Model)+
+  labs(x = plot_xlabel_density)
+  #ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"Density_FEP_Control",".png",sep=""))
+
+#Control vs Schizophrenia vs Other Psychoses
+#title = "Density Plots Stratified by Control and Psychosis type"
+ggplot(density_plots2, aes(Percentage, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Model)+
+  labs(x = plot_xlabel_density)
+  #ggtitle(title)
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"Density_Scz_Other_Control",".png",sep=""))
+
+
+
+
+####### Statistical Tests
+
+##### Statistics
+#Calculate Median Value for each ICD_DSM group
+Split_1_Data %>% group_by(ICD_DSM) %>% summarise(median(ensemble))
+#
+t.test(filter(Split_1_Data,ICD_DSM != "Control")$ensemble~filter(Split_1_Data,ICD_DSM != "Control")$ICD_DSM)
+fit <- aov(ensemble ~ ICD_DSM, data=Split_1_Data)
 
 
 #Plots of Algorithm for all splits
@@ -708,59 +815,240 @@ gglist
 
 
 
-#combined predictions and real values
-ggplot(data = model_preds3, aes(x = ICD_DSM, y=glmnet, colour = ICD_DSM, fill = ICD_DSM)) +
-  geom_boxplot(alpha = 0)+
-  geom_jitter(alpha = 0.3)+
-  coord_flip()+
-  ggtitle("Glmnet Model Trained on Dejong Predictions in GAP data")
-
-
-ggplot(data = filter(model_preds3,ICD_DSM =="Other_Psychosis"), aes(x = ICD10_GAP, y=glmnet, colour = ICD10_GAP, fill = ICD10_GAP)) +
-  theme(axis.title.y=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks.y=element_blank())+
-  geom_boxplot(alpha = 0)+
-  geom_jitter(alpha = 0.3)+
-  coord_flip()+
-  ggtitle("Glmnet Model Trained on Dejong Predictions on Other Psychosis data")
-
-
-ggplot(data = model_preds3, aes(x = ICD_DSM, y=glmnet, colour = ICD_DSM, fill = ICD_DSM)) +
-  geom_boxplot(alpha = 0)+
-  geom_jitter(alpha = 0.3)+
-  facet_wrap(~ Ethnicity)+
-  coord_flip()+
-  ggtitle("Glmnet Model Trained on Dejong Predictions in GAP data")
-
-ggplot(data = filter(model_preds3,ICD_DSM =="Other_Psychosis"), aes(x = ICD10_GAP, y=glmnet, colour = ICD10_GAP, fill = ICD10_GAP)) +
-  theme(axis.title.y=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks.y=element_blank())+
-  geom_boxplot(alpha = 0)+
-  geom_jitter(alpha = 0.3)+
-  facet_wrap(~ Ethnicity)+
-  coord_flip()+
-  ggtitle("Glmnet Model Trained on Dejong Predictions on Other Psychosis data")
-
-
-
-####### Predict GAP
-
-
-####### Plot GAP results
-
-
-####### Plot 3 way results
-
-
-####### Statistical Tests
-
 
 ```
 
 # Step 5: GAP data post hoc exploration
 ```{r GAP Post Hoc}
+
+
+
+####### 1_Gx characterisation with phenotypes. 
+
+##Categorical Variables
+#1. Ethnicity
+f_plots_posthoc <-function(inputd,xax,yax,col,pfacets,ptitle) {
+  ggplot(inputd, aes_string(x=xax,y=yax, colour = col)) +
+    #geom_point() +  
+    geom_boxplot(notch=F)+
+    geom_jitter() + 
+    #coord_flip()+
+    facet_wrap(as.formula(paste("~", pfacets)))+
+    ggtitle(ptitle)  
+}
+
+Split_1_Data$ensemble
+f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Ethnicity","Titleofplot")
+plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_6_Gx_PRS","ICD_DSM","Ethnicity","Titleofplot")
+
+#2. Gender
+f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Gender","Titleofplot")
+
+
+
+#3. Smoking 
+f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Tobacco","Titleofplot")
+
+#4. Medication
+f_plots_posthoc(filter(Split_1_Data,Phenotype!="Control"),"ICD_DSM","ensemble","ICD_DSM","Medication","Titleofplot")
+
+
+
+
+## Continues Variables
+#Create bins
+?quantile
+?cut
+
+Split_1_Data$Cuts<-cut(Split_1_Data$ensemble,quantile(Split_1_Data$ensemble,probs = c(0, 20, 40, 60, 80,100)/100))
+quantile(Split_1_Data$ensemble,probs())
+quantile(x<-c(1:100,1:100),  probs = c(25, 50, 1, 2, 5, 10, 50, NA)/100)
+quantile(x<-c(0:100,0:100)
+quantile(Split_1_Data$ensemble,probs = c(0, 20, 40, 60, 80,100)/100)
+
+
+
+#5. Age 
+f_plots_posthoc(Split_1_Data,"Cuts","Age","Cuts","ICD_DSM","Titleofplot")
+ggplot(Split_1_Data, aes(x=Cuts,y=Age, colour = ICD_DSM)) +
+  geom_jitter() +  
+  geom_boxplot(notch=F)+
+  coord_flip()+
+  ggtitle(title)
+
+
+
+#6. PRS (not imputed.)
+Split_1_Data_white<-filter(Split_1_Data,Ethnicity=="White")
+Split_1_Data_white<-filter(Split_1_Data_white,Phenotype=="FEP")
+Split_1_Data_white$Cuts<-cut(Split_1_Data_white$ensemble,quantile(Split_1_Data_white$ensemble,probs = c(0, 20, 40, 60, 80,100)/100))
+f_plots_posthoc(Split_1_Data_white,"ICD_DSM","PRS_0.1","ICD_DSM","Cuts","Titleofplot")
+Split_1_Data_white$Cuts
+
+cor(Split_1_Data_white$ensemble,Split_1_Data_white$PanssScore)
+
+
+#6. PANSS
+
+#Filter out controls
+Split_1_Data_nocon<-filter(Split_1_Data,ICD_DSM!="Control")
+
+
+Split_1_Data_nocon$pcaNNet
+#Select model data
+pmodel<-"pcaNNet"
+
+#get quantiles for cutting into equal groups
+Pquantiles<-quantile(Split_1_Data_nocon[,pmodel], probs = c(0,0.2,0.4,0.6,0.8,1))
+#round and 
+quantCuts<-as.vector(round(Pquantiles, 2)*100)[-1]
+#create cuts and add to DF
+Split_1_Data_nocon$Accuracy<-cut(Split_1_Data_nocon[,pmodel],Pquantiles,labels=quantCuts,include.lowest = T)
+
+
+pan<-c("PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+panCuts<-"Accuracy"
+for(n in 1:length(pan)){
+  PanssDF<-Split_1_Data_nocon
+  Title_plot_temp<-paste(pan[n]," vs binned Accuracy of sample classification",sep="")
+  print(f_plots_posthoc(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM",Title_plot_temp))
+}
+
+PanssDF<-Split_1_Data_nocon
+#PanssDF<-filter(PhenoMC_Data_nocon,Ethnicity == "White")
+n=1
+f_plots_posthoc(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","Full PANSS vs binned Accuracy of sample classification")
+#ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=2
+f_plots_posthoc(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Positive subscale vs binned Accuracy of sample classification")
+#ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=3
+f_plots_posthoc(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Negative subscale vs binned Accuracy of sample classification")
+#ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+n=4
+f_plots_posthoc(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Psychopathology subscale vs binned Accuracy of sample classification")
+#ggsave(paste(figs_dir,project_id,project_name,"_",pan[n],"_1_Gx.png",sep=""))
+
+
+
+
+n=2
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+#make dfs 
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
+#calculate correlations
+cor(corDFScz$ensemble,corDFScz[,pan[n]])
+cor(corDFOPSy$ensemble,corDFOPSy[,pan[n]])
+PP_lm = lm(ensemble ~ Medication, data=corDFScz)
+summary(PP_lm)
+PP_lm2 = lm(ensemble ~ PanssPositive, data=corDFOPSy)
+summary(PP_lm2)
+
+corDFScz$Medication
+
+
+ggplot(anovaDF, aes_string(x="ensemble",y=pan[n], colour = "ICD_DSM"))+
+  #stat_summary(fun.data=mean_cl_normal) + 
+  geom_smooth(method='lm') +
+  geom_point()
+
+
+###### Panss
+#Make Plots function
+ggplot(density_plots2, aes(Percentage, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  facet_wrap(~ Model)+
+  labs(x = plot_xlabel_density)
+  #ggtitle(title)
+
+# All models
+density_plots2$PanssScore
+anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
+ggplot(density_plots2, aes(x=Percentage,y=PanssScore, colour = ICD_DSM)) +
+  geom_point()+
+  facet_wrap(~ Model)+
+  #stat_summary(fun.data=mean_cl_normal)+
+  geom_smooth(method='lm')
+#All panss
+Panss_plots1=Split_1_Data[,c(1:34)]
+Panss_plots1=density_plots2
+Panss_plots2<-melt(Panss_plots1, id=c(names(Panss_plots1[,-c(14:17)])))
+colnames(Panss_plots2)
+dim(Panss_plots2)
+Panss_plots2[1:10,]
+Panss_plots3<-Panss_plots2[complete.cases(Panss_plots2$value),]
+colnames(Panss_plots3)
+##
+ggplot(Panss_plots3, aes(x=Percentage,y=value, colour = ICD_DSM)) +
+  geom_point()+
+  facet_wrap(~ variable+Model)+
+  #stat_summary(fun.data=mean_cl_normal)+
+  geom_smooth(method='lm')
+
+
+ggplot(filter(Panss_plots3,Model=="ensemble" & variable !="PanssScore"), aes(x=Percentage,y=value, colour = ICD_DSM)) +
+  geom_point()+
+  facet_wrap(~ variable+Model)+
+  #stat_summary(fun.data=mean_cl_normal)+
+  geom_smooth(method='lm')
+
+#Change colnames
+colnames(density_plots2)<-c(names(density_plots1[,-c(28:34)]),"Model","Percentage")
+
+
+  #labs(x = plot_xlabel_density)
+  #ggtitle(title)
+
+
+
+
+fit <- aov(PanssPositive ~ Accuracy, data=anovaDF)
+
+plant.mod1 = lm(PanssPositive ~ Accuracy, data = corDFOPSy)
+plant.mod1 = lm(PanssPsycho ~ Accuracy, data = corDFScz)
+summary(plant.mod1)
+str(anova(plant.mod1))
+confint(plant.mod1)
+
+corDFScz = data.frame(Fitted = fitted(plant.mod1),
+  Residuals = resid(plant.mod1), Treatment = corDFScz$PanssPsycho)
+
+
+?resid
+#5. ICD and DSM for other psych
+f_plots_posthoc(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"),"icd10","ensemble","icd10","Medication","Titleofplot")
+
+ggplot(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"), aes(x=dsmiv,y=ensemble, colour=dsmiv)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
+  coord_flip()+
+  theme(
+      axis.text.y=element_blank(),
+      axis.ticks.y=element_blank(),)
+
+ggplot(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"), aes(x=PanssPsycho,y=ensemble, colour=Medication)) +
+  geom_point()+
+  coord_flip()+
+  facet_wrap(~ dsmiv)
+
+ggplot(filter(Split_1_Data_nocon,ICD_DSM=="Schizophrenia"), aes(x=Gender,y=ensemble, colour=Ethnicity)) +
+  geom_point()+
+  coord_flip()+
+  facet_wrap(~ Medication)
+
+
+
+  #facet_wrap(as.formula(paste("~", pfacets)))+
+  #ggtitle(ptitle)  
+ggplot(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"), aes(x=icd10,y=ensemble, colour=icd10)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
+  coord_flip()
+ggplot(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"), aes(x=Medication,y=ensemble, colour=dsmiv)) +
+  geom_point() + 
+  coord_flip() 
+
 
 
 ```

@@ -832,25 +832,39 @@ f_plots_posthoc <-function(inputd,xax,yax,col,pfacets,ptitle) {
     #geom_point() +  
     geom_boxplot(notch=F)+
     geom_jitter() + 
-    #coord_flip()+
+    coord_flip()+
     facet_wrap(as.formula(paste("~", pfacets)))+
     ggtitle(ptitle)  
 }
 
+#Save plot
+Split_n_post = 1
+
 Split_1_Data$ensemble
-f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Ethnicity","Titleofplot")
-plot_fun_gx(PhenoMC_Data,"ICD_DSM","Acc_6_Gx_PRS","ICD_DSM","Ethnicity","Titleofplot")
+f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Ethnicity","")
+#plot filename
+plotfile_name =  "_Ethnicity"
+#plot save
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,Split_n_post,plotfile_name,"_boxplot.png",sep=""))
 
 #2. Gender
-f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Gender","Titleofplot")
+f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Gender","")
+#plot filename
+plotfile_name =  "_Gender"
+#plot save
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,Split_n_post,plotfile_name,"_boxplot.png",sep=""))
 
 
 
 #3. Smoking 
-f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Tobacco","Titleofplot")
+#f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Tobacco","Titleofplot")
 
 #4. Medication
-f_plots_posthoc(filter(Split_1_Data,Phenotype!="Control"),"ICD_DSM","ensemble","ICD_DSM","Medication","Titleofplot")
+f_plots_posthoc(filter(Split_1_Data,Phenotype!="Control"),"ICD_DSM","ensemble","ICD_DSM","Medication","")
+#plot filename
+plotfile_name =  "_Medication"
+#plot save
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,Split_n_post,plotfile_name,"_boxplot.png",sep=""))
 
 
 
@@ -1019,23 +1033,48 @@ corDFScz = data.frame(Fitted = fitted(plant.mod1),
 #5. ICD and DSM for other psych
 f_plots_posthoc(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"),"icd10","ensemble","icd10","Medication","Titleofplot")
 
-ggplot(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"), aes(x=dsmiv,y=ensemble, colour=dsmiv)) +
+ggplot(filter(Split_1_Data_nocon), aes(x=dsmiv,y=glmnet, colour=dsmiv)) +
   geom_boxplot(notch=F)+
   geom_jitter() + 
   coord_flip()+
   theme(
       axis.text.y=element_blank(),
       axis.ticks.y=element_blank(),)
+#plot filename
+plotfile_name =  "_dsmiv"
+#plot save
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,Split_n_post,plotfile_name,"_boxplot.png",sep=""))
 
-ggplot(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"), aes(x=PanssPsycho,y=ensemble, colour=Medication)) +
-  geom_point()+
+ggplot(Split_1_Data_nocon, aes(x=icd10,y=ensemble, colour=icd10)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
   coord_flip()+
-  facet_wrap(~ dsmiv)
+  scale_x_discrete()+
+  theme(
+      axis.text.y=element_blank(),
+      axis.ticks.y=element_blank(),)
+#plot filename
+plotfile_name =  "_icd10"
+#plot save
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,Split_n_post,plotfile_name,"_boxplot.png",sep=""))
 
-ggplot(filter(Split_1_Data_nocon,ICD_DSM=="Schizophrenia"), aes(x=Gender,y=ensemble, colour=Ethnicity)) +
-  geom_point()+
+
+
+ggplot(Split_1_Data_nocon, aes(x=reorder(icd10, ensemble, FUN=median),y=ensemble, colour=reorder(icd10, ensemble, FUN=median))) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
   coord_flip()+
-  facet_wrap(~ Medication)
+  scale_x_discrete()+
+  theme(
+      axis.text.y=element_blank(),
+      axis.ticks.y=element_blank(),)
+#plot filename
+plotfile_name =  "_icd10"
+#plot save
+ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,Split_n_post,plotfile_name,"_boxplot.png",sep=""))
+
+
+
 
 
 
@@ -1052,6 +1091,65 @@ ggplot(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"), aes(x=Medication,y=e
 
 
 ```
+
+
+# Demographics
+```{r IMPACT}
+table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
+  #output name of model define
+  t_title=out_name_id
+  latex="_latex"
+  latex="_latex"
+  #Create Table of demographics with 4 predicted groups.
+  listVars <- c("Gender","Age", "Ethnicity","BMI","Tobacco","ICD_DSM",names(mldata)[prs_col])
+  catVars <- c("Ethnicity","Tobacco","ICD_DSM")
+  table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("ConfusionMatrix"),includeNA = T)
+  table1print<-print(table1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+  write.csv(table1print, file=paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
+
+  
+  #Create Table of demographics with 4 predicted groups. 
+  listVars2 <- c("Medication","dsmiv","icd10","ICD_DSM","PanssScore","PanssPositive","PanssNegative","PanssPsycho")
+  catVars2 <- c("Medication","dsmiv","icd10","ICD_DSM")
+  table2_full <- CreateTableOne(vars = listVars2, data = filter(mldata,Phenotype=="FEP"), factorVars = catVars2,strata=c("ConfusionMatrix"),includeNA = T)
+  table2print<-print(table2_full,quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+  write.csv(table2print, paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),row.names = TRUE, col.names = TRUE,quote=FALSE,sep = ",")
+  
+  #stargazer latex tables
+  table1sg<-stargazer(table1print[,1:5],summary=FALSE, rownames=T)
+  write.csv(table1sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
+  table2sg<-stargazer(table2print[,1:3],summary=FALSE, rownames=T)
+  write.csv(table2sg,paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_meds_Demographics.csv",sep=""),sep="",row.names=F,col.names = F)
+}
+
+t_title="_GAP_all"
+latex="_latex"
+filename_demo=paste(output_dir,project_id,project_name,Sub_prefix,Split_n_post,t_title,"_Demographics.csv",sep="")
+filename_dem0=paste(output_dir,project_id,project_name,t_title,"_Demographics.csv",sep="")
+#paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_Demographics.csv",sep="")
+
+Split_1_Data$Phenotype
+mldata=Split_1_Data
+listVars <- c("Gender","Age", "Ethnicity","Medication")
+catVars <- c("Ethnicity","Medication")
+table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("ICD_DSM"),includeNA = T)
+table1print<-print(table1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+#not latex
+write.csv(table1print, file=filename_demo,row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
+
+
+
+filename_demo_latex=paste(output_dir,project_id,project_name,latex,"_",t_title,"_Demographics.csv",sep="")
+#paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_Demographics.csv",sep="")
+#stargazer latex tables
+table1sg<-stargazer(table1print[,1:5],summary=FALSE, rownames=T)
+write.csv(table1sg,filename_demo_latex,sep="",row.names=F,col.names = F)
+  
+
+
+```
+
+
 
 # Step 6: Load IMPACT & Predict
 ```{r IMPACT}

@@ -531,8 +531,22 @@ MLresults_table<-t(round(ResultsTable[,1:10], digits = 2))
 rownames(MLresults_table)=paste("AUC_Data_",c(1:10),sep="")
 write.csv(MLresults_table,paste(output_dir,project_id,project_name,Sub_prefix,"MLresults.csv",sep=""))
 
+#stats MAD https://eurekastatistics.com/using-the-median-absolute-deviation-to-find-outliers/
+#clean data
+MAD_input<-data.frame(MLresults_table)
+MAD_input$Split<-rownames(MAD_input)
+MAD_input<-melt(MAD_input, id=c("Split"))
 
-ResultsTable$Model<-rownames(ResultsTable)
+#perform Mad calculation
+MAD_input <- MAD_input[!is.na(MAD_input[,3]),]
+MAD_input$Mad<-abs(MAD_input[,3] - median(MAD_input[,3])) / mad(MAD_input[,3])
+MAD_input[MAD_input$Mad > 2,]
+#group and average
+MAD_input %>% group_by(Split) %>% summarise(average = mean(Mad))
+MAD_input %>% group_by(variable) %>% summarise(average = mean(Mad))
+histogram(MAD_input$Mad)
+
+
 #RFE
 plot_models<-melt(ResultsTable,id="Model")
 colnames(plot_models)<-c("Models","Dataset","AUC")
@@ -541,7 +555,7 @@ colnames(plot_models)<-c("Models","Dataset","AUC")
 ggplot(data.frame(plot_models), aes(x=Dataset,y=AUC, colour=Dataset)) +
   geom_boxplot(notch=F)+
   geom_jitter() + 
-  coord_flip()+
+  coord_flip()
   #facet_wrap(as.formula(paste("~", pfacets)))+
   #ggtitle(ptitle)  
 ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_ROC_vs_Dejong_splits",".png",sep=""))
@@ -551,7 +565,7 @@ ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_ROC_vs_Dejong_splits"
 ggplot(data.frame(plot_models), aes(x=Models,y=AUC, colour=Models)) +
   geom_boxplot(notch=F)+
   geom_jitter() + 
-  coord_flip()+
+  coord_flip()
   #facet_wrap(as.formula(paste("~", pfacets)))+
   #ggtitle(ptitle)  
 ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"_ROC_vs_Dejong_models",".png",sep=""))
@@ -673,7 +687,24 @@ ResultsTable_GAP<-data.frame(ResultsTable_GAP)
 MLresults_table_GAP<-t(round(ResultsTable_GAP[,1:10], digits = 2))
 rownames(MLresults_table_GAP)=paste("Train_Data_",c(1:10),sep="")
 write.csv(MLresults_table_GAP,paste(output_dir,project_id,project_name,Sub_prefix,"MLresults_GAP.csv",sep=""))
+#stats MAD https://eurekastatistics.com/using-the-median-absolute-deviation-to-find-outliers/
+#clean data
+MAD_input<-data.frame(MLresults_table_GAP)
+MAD_input$Split<-rownames(MAD_input)
+MAD_input<-melt(MAD_input, id=c("Split"))
 
+#perform Mad calculation
+MAD_input <- MAD_input[!is.na(MAD_input[,3]),]
+MAD_input$Mad<-abs(MAD_input[,3] - median(MAD_input[,3])) / mad(MAD_input[,3])
+MAD_input[MAD_input$Mad > 2,]
+min(MAD_input[3])
+max(MAD_input[3])
+
+#group and average
+MAD_input %>% group_by(Split) %>% summarise(average = mean(Mad))
+MAD_input %>% group_by(variable) %>% summarise(average = mean(Mad))
+
+histogram(MAD_input$Mad)
 
 #Results for all Patients GAP. In list. Save!
 save(ResultsList_GAP_allpatients, file=paste(output_dir,project_id,project_name,Sub_prefix,"GAP_Patient_predictions_Saved.rdata",sep=""), compress = T)
@@ -725,10 +756,11 @@ write.csv(full_Accuracy_Table,paste(output_dir,project_id,project_name,Sub_prefi
 #Small Table
 full_Accuracy_Table
 
-
-
-
-
+########## Added table just schizophrenia in both ICD10 and DSMIV
+Split_1_Data_SCZ_both<-filter(Split_1_Data,(icd10 == "Schizophrenia" & dsmiv ==  "Schizophrenia") |  ICD_DSM == "Control")
+GAP_SCZ_ICD_and_DSM<-f_meta_confuse(Split_1_Data_SCZ_both,"SCZ_Both")
+write.csv(GAP_SCZ_ICD_and_DSM,paste(output_dir,project_id,project_name,Sub_prefix,"Split_1_Confusion_Matrix_SCZ_both_metrics.csv",sep=""))
+25/30
 
 
 ##### Make Bar Plots of data
@@ -792,10 +824,72 @@ ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,"Density_Scz_Other_Cont
 
 ##### Statistics
 #Calculate Median Value for each ICD_DSM group
+Split_1_Data %>% group_by(Phenotype) %>% summarise(median(ensemble))
 Split_1_Data %>% group_by(ICD_DSM) %>% summarise(median(ensemble))
+
 #
 t.test(filter(Split_1_Data,ICD_DSM != "Control")$ensemble~filter(Split_1_Data,ICD_DSM != "Control")$ICD_DSM)
 fit <- aov(ensemble ~ ICD_DSM, data=Split_1_Data)
+# Test Case - FEP
+t.test(filter(Split_1_Data,ICD_DSM == "Control")$ensemble,filter(Split_1_Data,ICD_DSM != "Control")$ensemble)
+t.test(filter(Split_1_Data,ICD_DSM == "Control")$ensemble,filter(Split_1_Data,ICD_DSM == "Schizophrenia")$ensemble)
+t.test(filter(Split_1_Data,ICD_DSM == "Control")$ensemble,filter(Split_1_Data,ICD_DSM == "Other_Psychosis")$ensemble)
+t.test(filter(Split_1_Data,ICD_DSM == "Schizophrenia")$ensemble,filter(Split_1_Data,ICD_DSM == "Other_Psychosis")$ensemble)
+Other_var<-filter(Split_1_Data,ICD_DSM == "Other_Psychosis")$ensemble
+SCZ_var<-filter(Split_1_Data,ICD_DSM == "Schizophrenia")$ensemble
+Control_var<-filter(Split_1_Data,ICD_DSM == "Control")$ensemble
+
+#Anova and Tukey test for diagnosis
+fit <- aov(ensemble ~ ICD_DSM, data=Split_1_Data)
+summary(fit)
+Stat_results<-TukeyHSD(fit)
+Stat_results
+
+fit <- aov(ensemble ~ Gender + Ethnicity, data=Split_1_Data)
+summary(fit)
+Stat_results<-TukeyHSD(fit)
+Stat_results
+
+#Other Psych stats
+Other_psych_stats<-filter(Split_1_Data,ICD_DSM != "Control")
+Other_psych_stats<-filter(Split_1_Data,ICD_DSM != "Control")
+#perform Mad calculation
+#MAD_input <- Other_psych_stats[!is.na(MAD_input[,3]),]
+Other_psych_stats$Mad<-abs(Other_psych_stats$ensemble - median(Other_psych_stats$ensemble)) / mad(Other_psych_stats$ensemble)
+Other_psych_stats[Other_psych_stats$Mad > 1,]
+Misclassed<-Other_psych_stats[Other_psych_stats$ensemble < 0.5,]
+
+table(Other_psych_stats$dsmiv)
+table(Misclassed$dsmiv)
+table(Misclassed$icd10)
+table(Misclassed$dsmiv)
+table(Misclassed[,c("icd10","dsmiv")])
+Otherpsych_ensemble<-filter(Other_psych_stats[,c("icd10","dsmiv","ICD_DSM","ensemble","ensemble_Categorical")],dsmiv == "Schizophreniform Disorder")
+Otherpsych_ensemble<-filter(Other_psych_stats[,c("icd10","dsmiv","ICD_DSM","ensemble","ensemble_Categorical")],dsmiv == "Schizophrenia")
+table(filter(Otherpsych_ensemble,ICD_DSM == "Schizophrenia")$ensemble_Categorical)
+16/(9+16)
+26/(26+6)
+median(filter(Otherpsych_ensemble,ICD_DSM == "Schizophrenia")$ensemble)
+
+filter(Split_1_Data,ICD_DSM != "Control")
+dftest<-Split_1_Data %>% group_by(dsmiv) %>% filter(n()>15) #
+table(dftest$dsmiv)
+fit <- aov(ensemble ~ dsmiv, data=dftest)
+summary(fit)
+Stat_results<-TukeyHSD(fit)$dsmiv
+colnames(Stat_results)= c("diff","lwr", "upr" ,"p_adj")
+Stat_res_dsmiv<-data.frame(Stat_results)
+Stat_res_dsmiv$compare= rownames(Stat_results)
+
+filter(data.frame(Stat_res_dsmiv),p_adj <= 0.6)
+
+
+
+#group and average
+Other_psych_stats %>% group_by(dsmiv) %>% summarise(average = mean(Mad))
+Other_psych_stats %>% group_by(dsmiv) %>% summarise(average = median(ensemble))
+MAD_input %>% group_by(variable) %>% summarise(average = mean(ensemble))
+Other_psych_stats
 
 
 #Plots of Algorithm for all splits
@@ -840,7 +934,7 @@ f_plots_posthoc <-function(inputd,xax,yax,col,pfacets,ptitle) {
 #Save plot
 Split_n_post = 1
 
-Split_1_Data$ensemble
+
 f_plots_posthoc(Split_1_Data,"ICD_DSM","ensemble","ICD_DSM","Ethnicity","")
 #plot filename
 plotfile_name =  "_Ethnicity"
@@ -871,8 +965,6 @@ ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,Split_n_post,plotfile_n
 
 ## Continues Variables
 #Create bins
-?quantile
-?cut
 
 Split_1_Data$Cuts<-cut(Split_1_Data$ensemble,quantile(Split_1_Data$ensemble,probs = c(0, 20, 40, 60, 80,100)/100))
 quantile(Split_1_Data$ensemble,probs())
@@ -890,7 +982,14 @@ ggplot(Split_1_Data, aes(x=Cuts,y=Age, colour = ICD_DSM)) +
   coord_flip()+
   ggtitle(title)
 
+Split_1_Data
 
+#Hmisc
+library(Hmisc)
+#mtcars is a data frame 
+rcorr(as.matrix(filter(Split_1_Data,ICD_DSM=="Other_Psychosis")[,c(6,34)]), type="pearson")
+rcorr(as.matrix(filter(Split_1_Data,ICD_DSM=="Schizophrenia")[,c(6,34)]), type="pearson")
+rcorr(as.matrix(filter(Split_1_Data,ICD_DSM=="Control")[,c(6,34)]), type="pearson")
 
 #6. PRS (not imputed.)
 Split_1_Data_white<-filter(Split_1_Data,Ethnicity=="White")
@@ -910,7 +1009,7 @@ Split_1_Data_nocon<-filter(Split_1_Data,ICD_DSM!="Control")
 
 Split_1_Data_nocon$pcaNNet
 #Select model data
-pmodel<-"pcaNNet"
+pmodel<-"ensemble"
 
 #get quantiles for cutting into equal groups
 Pquantiles<-quantile(Split_1_Data_nocon[,pmodel], probs = c(0,0.2,0.4,0.6,0.8,1))
@@ -945,15 +1044,28 @@ f_plots_posthoc(PanssDF,panCuts,pan[n],panCuts,"ICD_DSM","PANSS Psychopathology 
 
 
 
+#Hmisc
+library(Hmisc)
 
-n=2
+n=4
 anovaDF<-PanssDF[complete.cases(PanssDF[,pan[n]]),]
 #make dfs 
-corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia")
+#corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia" & ensemble <= 0.5)
+#corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia"& ensemble <= 0.5)
+corDFScz<-filter(anovaDF,ICD_DSM =="Schizophrenia" )
 corDFOPSy<-filter(anovaDF,ICD_DSM !="Schizophrenia")
 #calculate correlations
+# data frame 
+rcorr(as.matrix(corDFScz[,c(13+n,34)]), type="pearson") # 13 is 1 before panss. So n goes down the line. Stupid hack. Try to avoid. 
+rcorr(as.matrix(corDFOPSy[,c(13+n,34)]), type="pearson") # 13 is 1 before panss. So n goes down the line. Stupid hack. Try to avoid. 
+
+
+
+
 cor(corDFScz$ensemble,corDFScz[,pan[n]])
 cor(corDFOPSy$ensemble,corDFOPSy[,pan[n]])
+names(corDFScz)
+
 PP_lm = lm(ensemble ~ Medication, data=corDFScz)
 summary(PP_lm)
 PP_lm2 = lm(ensemble ~ PanssPositive, data=corDFOPSy)
@@ -1028,12 +1140,12 @@ confint(plant.mod1)
 corDFScz = data.frame(Fitted = fitted(plant.mod1),
   Residuals = resid(plant.mod1), Treatment = corDFScz$PanssPsycho)
 
-
+table(Split_1_Data_nocon$dsmiv)
 ?resid
 #5. ICD and DSM for other psych
 f_plots_posthoc(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"),"icd10","ensemble","icd10","Medication","Titleofplot")
 
-ggplot(filter(Split_1_Data_nocon), aes(x=dsmiv,y=glmnet, colour=dsmiv)) +
+ggplot(filter(Split_1_Data_nocon), aes(x=dsmiv,y=ensemble, colour=dsmiv)) +
   geom_boxplot(notch=F)+
   geom_jitter() + 
   coord_flip()+
@@ -1075,7 +1187,23 @@ ggsave(paste(figs_dir,project_id,project_name,Sub_prefix,Split_n_post,plotfile_n
 
 
 
+ggplot(filter(Split_1_Data_nocon), aes(x=dsmiv,y=glmnet, colour=dsmiv)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
+  coord_flip()+
+  facet_wrap(~Ethnicity)+
+  theme(
+      axis.text.y=element_blank(),
+      axis.ticks.y=element_blank(),)
 
+ggplot(filter(Split_1_Data_nocon, Ethnicity == "White" | Ethnicity == "Black"), aes(x=dsmiv,y=ensemble, colour=Ethnicity)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
+  coord_flip()
+  #facet_wrap(~icd10)+
+  theme(
+      axis.text.y=element_blank(),
+      axis.ticks.y=element_blank(),)
 
 
   #facet_wrap(as.formula(paste("~", pfacets)))+
@@ -1088,7 +1216,23 @@ ggplot(filter(Split_1_Data_nocon,ICD_DSM!="Schizophrenia"), aes(x=Medication,y=e
   geom_point() + 
   coord_flip() 
 
+dim(Split_1_Data_nocon)
+Split_1_Data_nocon$Accuracy
+ggplot(Split_1_Data_nocon, aes(Percentage, colour = ICD_DSM)) +
+  geom_density(alpha=0.01)+
+  #facet_wrap(~ Model)+
+  labs(x = plot_xlabel_density)
 
+
+
+ggplot(filter(Split_1_Data, Ethnicity == "White" | Ethnicity == "Black"), aes(x=ICD_DSM,y=glmnet, colour=Ethnicity)) +
+  geom_boxplot(notch=F)+
+  geom_jitter() + 
+  coord_flip()+
+  #facet_wrap(~icd10)+
+  theme(
+      axis.text.y=element_blank(),
+      axis.ticks.y=element_blank(),)
 
 ```
 
@@ -1124,11 +1268,11 @@ table_fun_ml<- function(mldata,out_name_id,prs_col=(20:28)){
 
 t_title="_GAP_all"
 latex="_latex"
-filename_demo=paste(output_dir,project_id,project_name,Sub_prefix,Split_n_post,t_title,"_Demographics.csv",sep="")
-filename_dem0=paste(output_dir,project_id,project_name,t_title,"_Demographics.csv",sep="")
+#filename_demo=paste(output_dir,project_id,project_name,Sub_prefix,Split_n_post,t_title,"_Demographics.csv",sep="")
+filename_demo=paste(output_dir,project_id,project_name,t_title,"_Demographics.csv",sep="")
 #paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_Demographics.csv",sep="")
 
-Split_1_Data$Phenotype
+
 mldata=Split_1_Data
 listVars <- c("Gender","Age", "Ethnicity","Medication")
 catVars <- c("Ethnicity","Medication")
@@ -1142,7 +1286,7 @@ write.csv(table1print, file=filename_demo,row.names = TRUE, col.names = TRUE,quo
 filename_demo_latex=paste(output_dir,project_id,project_name,latex,"_",t_title,"_Demographics.csv",sep="")
 #paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_Demographics.csv",sep="")
 #stargazer latex tables
-table1sg<-stargazer(table1print[,1:5],summary=FALSE, rownames=T)
+table1sg<-stargazer(table1print[,1:4],summary=FALSE, rownames=T)
 write.csv(table1sg,filename_demo_latex,sep="",row.names=F,col.names = F)
   
 

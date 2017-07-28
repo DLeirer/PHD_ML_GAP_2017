@@ -61,7 +61,7 @@ table_fun<- function(mldata,split,prs_col=prs_col){
 ```{r Load data}
 
 load(paste(P0_output_dir,"GAP_FEP_eset_linear_adj_Data.RData",sep=""))
-load(paste(P0_output_dir,"GAP_FEP_eset_linear_full_adj_Data.RData",sep=""))
+#load(paste(P0_output_dir,"GAP_FEP_eset_linear_full_adj_Data.RData",sep=""))
 
 
 ```
@@ -96,7 +96,7 @@ dim(exprs_data)
 
 # pheno data
 names(pData(GX_lumi_object))
-pheno_data<-pData(GX_lumi_object)[,c(1,6,9,11:19,74,21:24,64:73)]
+pheno_data<-pData(GX_lumi_object)[,c(1,6,9,11:19,74,21:24,64:73,75:84)]
 names(pheno_data)
 
 
@@ -106,7 +106,7 @@ names(pheno_data)
 #Add phenotype to Gene expression. 
 GX_DF<-droplevels(merge(pheno_data,exprs_data, by.x="sampleID",by.y="row.names"))
 row.names(GX_DF)<-GX_DF[,1]
-GX_DF[1:10,1:10]
+GX_DF[1:10,1:50]
 GX_DF_adj<-GX_DF
 
 training_index <- createDataPartition(GX_DF$Phenotype, p = 0.70, list = F)

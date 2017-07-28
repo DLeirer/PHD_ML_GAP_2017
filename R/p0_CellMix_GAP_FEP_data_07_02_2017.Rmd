@@ -240,12 +240,84 @@ reduced_pheno_final<-reduced_probs_pheno_prs_order %>% mutate(ICD_DSM=ifelse(dsm
                                                                 ifelse(dsmiv =="Control", "Control", "Other_Psychosis")))
 
 
-         
 #########################################################
-pData(eset_bg_log2_rsn_SVA_Good)<-reduced_pheno_final
+#Adjust PRS for Principle components
+
+#New matrix Remove mising values
+names(reduced_pheno_final)
+head(reduced_pheno_final)
+PRS_to_adjust<-reduced_pheno_final[c(1,6,9,64:73)]
+rownames(PRS_to_adjust)<-reduced_pheno_final$sampleID
+
+#remove columns not needed
+PRS_to_adjust<-PRS_to_adjust[complete.cases(PRS_to_adjust),]
+
+
+##get principle components to use for adjustment
+#Reduce
+PRS_eigenvalue_adjust<-PRS_eigenvalues_data[c(2,3,9:18)]
+PRS_eigenvalue_adjust<-PRS_eigenvalue_adjust[complete.cases(PRS_eigenvalue_adjust),]
+#Reduce to relevant Samples
+PRS_eigenvalue_adjust<-PRS_eigenvalue_adjust[PRS_eigenvalue_adjust$GAP_ID%in%PRS_to_adjust$gap_id,]
+colnames(PRS_eigenvalue_adjust)[2]<-"gap_id"
+#change to integer
+PRS_eigenvalue_adjust$gap_id<-as.integer(as.character(PRS_eigenvalue_adjust$gap_id))
+#combine PRS values and eigenvalues.
+Combined_PRS<-inner_join(PRS_eigenvalue_adjust,PRS_to_adjust,by="gap_id")
+
+#add rownames
+rownames(Combined_PRS)<-Combined_PRS$sampleID
+
+#Make adjustment data and pdata
+names(Combined_PRS)
+PRS_matrix<-t(Combined_PRS[,15:24])
+
+#Model For matrix, have samples as columns. variables as rows.
+#mod = model.matrix(~eigen_1+eigen_2,data=Combined_PRS)
+formula_formod<-as.formula(paste("~", paste(paste("eigen_",1:10,sep=""), collapse="+")))
+mod = model.matrix(formula_formod,data=Combined_PRS)
+fit = lm.fit(mod,t(PRS_matrix))
+#add residuals to average expression data
+PRS_adjusted<-t(fit$residuals)+apply(PRS_matrix,1,mean)
+
+#clean PRS_adjusted
+PRS_adjusted<-t(PRS_adjusted)
+colnames(PRS_adjusted)<-paste(colnames(PRS_adjusted),"_adj",sep="")
+PRS_adjusted<-as.data.frame(PRS_adjusted)
+PRS_adjusted$sampleID<-rownames(PRS_adjusted)
+
+PRS_adjusted_full<-cbind(Combined_PRS,PRS_adjusted)
+
+#combine with orginal data
+reduced_pheno_final_adj_PRS<-full_join(reduced_pheno_final,PRS_adjusted,by="sampleID")
+
+
+
+ggplot(data = reduced_pheno_final_adj_PRS, 
+      aes(x = ICD_DSM, y=PRS_0.1_adj,colour = ICD_DSM)) +
+      geom_jitter() +
+      geom_boxplot()+
+      facet_wrap(~ Ethnicity)
+
+title = "PRS vs Psychosis categories"
+ggplot(data = reduced_pheno_final_adj_PRS, 
+      aes(x = ICD_DSM, y=PRS_1,colour = ICD_DSM)) +
+      geom_jitter() +
+      geom_boxplot()+
+      facet_wrap(~ Ethnicity)
+
+
+
+#########################################################
+
+
+pData(eset_bg_log2_rsn_SVA_Good)<-reduced_pheno_final_adj_PRS
 names(pData(eset_bg_log2_rsn_SVA_Good))
 save(eset_bg_log2_rsn_SVA_Good,file=paste(P0_output_dir,"GAP_FEP_small_Gene_Expression_Data.RData",sep=""))
 ```
+
+
+
 
 ##Linear model to remove covariate effect: done 2 times. Once to remove just blood, once to also consider ethncity, age, sex.
 ```{r, tidy=TRUE}
@@ -262,7 +334,6 @@ fit = lm.fit(mod,t(exprs_rAESB))
 #add residuals to average expression data
 exprs_res_cor_adj<-t(fit$residuals)+apply(exprs_rAESB,1,mean)
 exprs_res_cor_adj[1:10,1:10]
-
 
 #make Lumibatch
 exprs_into_lumibatch2<-exprs_res_cor_adj
@@ -306,208 +377,3 @@ all.equal(exprs(eset_linear_full_adj),exprs(eset_linear_adj)) ## False. Some dif
 ```
 
 
-
-```{r, tidy=TRUE}
-######################################### in construction
-
-#######Adjust using principle components?????
-##trying to adjust PRS> 
-phenodat2<-phenodat[complete.cases(phenodat$PRS_1),]
-phenodat2<-droplevels(phenodat2)
-
-
-names(phenodat2)
-mod2 = model.matrix(~as.factor(Gender)+as.factor(Ethnicity),data=phenodat2)
-fit = lm.fit(mod2,as.matrix(phenodat2[64:73]))
-#add residuals to average expression data
-exprs_res_cor_adj<-t(fit$residuals)+apply(t(as.matrix(phenodat2[64:73])),1,mean)
-t(exprs_res_cor_adj)[1:10,1:10]
-phenodat2[1:10,64:73]
-phenodat2[64:73]<-t(exprs_res_cor_adj)
-phenodat2=filter(phenodat2,Ethnicity=="White")
-phenodat2[64:73]<-scale(phenodat2[64:73])
-table(phenodat2$PHENOTYPE)
-table(phenodat2$ICD_DSM)
-
-title = "PRS vs Psychosis categories"
-ggplot(phenodat2, aes(PRS_1,fill = ICD_DSM, colour = ICD_DSM)) +
-  geom_density(alpha=0.01)+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-
-
-
-names(phenodat2[64:73])
-dim(filter(phenodat2,PRS_0.1 < 2 & PRS_0.1 > -2))
-
-ggplot(data = filter(phenodat2,PRS_0.05 < 2.5 & PRS_0.05 > -2.5), 
-      aes(x = ICD_DSM, y=PRS_0.05  , colour = ICD_DSM)) +
-      geom_jitter() +
-      geom_boxplot()+
-      facet_wrap(~ Ethnicity)+
-      ggtitle(title)
-
-
-
-ggplot(data = filter(phenodat2,PRS_0.05 < 3 & PRS_0.05 > -3), aes(PRS_0.05,fill = Phenotype, colour = Phenotype))+
-  geom_density(alpha=0.01)+
-  #facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-
-
-###############################################################################################################################################################
-##trying to adjust PRS
-str(phenodat2)
-dim(phenodat)
-phenodat2<-phenodat[complete.cases(phenodat$PRS_1),]
-phenodat2<-droplevels(phenodat2)
-str(PRS_data)
-
-str(PRS_eigenvalues_data)
-names()
-table(phenodat$gap_id%in%PRS_eigenvalues_data$GAP_ID)
-
-
-
-colnames(PRS_eigenvalues_data)[3]<-"gap_id"
-colnames(PRS_eigenvalues_data)[2]<-"SampleID"
-
-table(phenodat$gap_id%in%PRS_eigenvalues_data2$gap_id)
-
-PRS_eigenvalues_data$gap_id<-as.numeric(as.character(PRS_eigenvalues_data$gap_id))
-PRS_eigenvalues_data2<-PRS_eigenvalues_data[!is.na(PRS_eigenvalues_data$eigen_1),]
-
-#PRS_eigenvalues_data2<-filter(PRS_eigenvalues_data,DNA =="blood")
-colnames(PRS_eigenvalues_data)
-PRS_eigenvalues_data[1:10,1:10]
-colnames(PRS_eigenvalues_data[c(1:3,9:28)])
-phenodat2[1:10,1:10]
-colnames(phenodat2[,c(1,9:10,64:73)])
-phenodat2$sampleID
-dim(phenodat2)
-testjoin<-left_join(phenodat2[,c(1,9,64:73)],PRS_eigenvalues_data[,c(1:3,9:28)],by="gap_id")
-testjoin<-left_join(phenodat2[,c(1:63,64:74)],PRS_eigenvalues_data[,c(1:3,9:28)],by="gap_id")
-testjoin<-left_join(phenodat2[,c(1:63,64:74)],PRS_eigenvalues_data[,c(1:3,9:28)],by="SampleID")
-#testjoin2<-left_join(PRS_data,PRS_eigenvalues_data[,c(1:3,9:28)],by="gap_id")
-testjoin2<-left_join(PRS_data,PRS_eigenvalues_data[,c(1:3,9:28)],by="gap_id")
-
-
-
-
-testjoin<-left_join(phenodat2[,c(1:63,64:74)],PRS_eigenvalues_data[,c(1:3,9:28)],by="SampleID")
-mod2 = model.matrix(~eigen_1+eigen_2+eigen_3+eigen_4+eigen_5+eigen_6+eigen_7+eigen_8+eigen_9+eigen_10,data=testjoin)
-fit = lm.fit(mod2,as.matrix(testjoin[64:73]))
-#add residuals to average expression data
-exprs_res_cor_adj<-t(fit$residuals)+apply(t(as.matrix(testjoin[64:73])),1,mean)
-t(exprs_res_cor_adj)[1:10,1:10]
-testjoin[1:10,64:73]
-testjoin[64:73]<-t(exprs_res_cor_adj)
-#testjoin=filter(testjoin,Ethnicity=="White")
-testjoin[64:73]<-scale(testjoin[64:73])
-table(testjoin$PHENOTYPE)
-table(testjoin$ICD_DSM)
-
-str(testjoin)
-
-
-str()
-
-
-
-title = "PRS vs Psychosis categories"
-ggplot(testjoin, aes(PRS_0.05,fill = ICD_DSM, colour = ICD_DSM)) +
-  geom_density(alpha=0.01)+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-
-
-
-#names(testjoin[64:73])
-#dim(filter(testjoin,PRS_0.1 < 2 & PRS_0.1 > -2))
-
-#colnames(testjoin)
-
-
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_5e08, colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_1e05, colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_1e04, colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_0.001, colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_0.01, colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_0.05  , colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_0.1  , colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_0.2, colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_0.5, colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-ggplot(data =testjoin, 
-       aes(x = ICD_DSM, y=PRS_1, colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-
-
-
-
-ggplot(data = filter(testjoin,PRS_0.05 < 2.5 & PRS_0.05 > -2.5), 
-       aes(x = ICD_DSM, y=PRS_0.05  , colour = ICD_DSM)) +
-  geom_jitter() +
-  geom_boxplot()+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-
-
-
-ggplot(data = filter(testjoin,PRS_0.05 < 3 & PRS_0.05 > -3), aes(PRS_0.05,fill = Phenotype, colour = Phenotype))+
-  geom_density(alpha=0.01)+
-  facet_wrap(~ Ethnicity)+
-  ggtitle(title)
-
-
-
-
-######################################### in construction end
-```

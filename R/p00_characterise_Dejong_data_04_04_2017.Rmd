@@ -188,3 +188,35 @@ save(Pheno_dejong,Gx_dejong,Missing_probes_Dejong,GAP_Dejong_Full_Fdata,file=pas
 
 ```
 
+
+#Write demographics:
+```{r demographics}
+
+str(Schizophrenia_phenotype_data)
+names(Schizophrenia_phenotype_data)
+head(Schizophrenia_phenotype_data)
+
+mldata=Schizophrenia_phenotype_data[,c(32:33,36)]
+names(mldata)=c("Age","Gender","Phenotype")
+
+t_title="_Dejong_all"
+latex="_latex"
+filename_demo=paste(output_dir,project_id,project_name,t_title,"_Demographics.csv",sep="")
+#paste(output_dir,project_id,"not_latex","_",t_title,"_","Table_CM_1_Demographics.csv",sep="")
+
+
+listVars <- c("Gender","Age")
+catVars <- c("Gender")
+table1 <- CreateTableOne(vars = listVars, data = mldata, factorVars = catVars,strata=c("Phenotype"),includeNA = T)
+table1print<-print(table1, quote = FALSE, noSpaces = TRUE, printToggle = FALSE)
+#not latex
+write.csv(table1print, file=filename_demo,row.names = TRUE, col.names = TRUE,quote=FALSE,sep=",")
+
+filename_demo_latex=paste(output_dir,project_id,project_name,latex,"_",t_title,"_Demographics.csv",sep="")
+#paste(output_dir,project_id,latex,"_",t_title,"_","Table_CM_1_Demographics.csv",sep="")
+#stargazer latex tables
+table1sg<-stargazer(table1print[,1:3],summary=FALSE, rownames=T)
+write.csv(table1sg,filename_demo_latex,sep="",row.names=F,col.names = F)
+
+```
+
